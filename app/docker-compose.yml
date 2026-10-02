@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      # Enables reading delivery-note photos. Put ANTHROPIC_API_KEY=... in a .env file next to this one.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
