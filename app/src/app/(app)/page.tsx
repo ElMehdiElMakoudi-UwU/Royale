@@ -6,7 +6,9 @@ import { requireUser } from "@/lib/auth";
 import { dateLabel, money, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { usersById } from "@/lib/queries";
-import { factoryAccount } from "@/lib/money";
+import { addDays, factoryAccount } from "@/lib/money";
+import { openOrders } from "@/lib/orders";
+import { OrderStatusChip } from "./orders/status-chip";
 import { salesPeriods } from "@/lib/sales";
 
 function ActionCard({ href, title, hint, icon }: { href: string; title: string; hint: string; icon: React.ReactNode }) {
@@ -56,6 +58,8 @@ export default async function HomePage() {
     .limit(5)
     .all();
   const names = usersById();
+  // Late, today's and tomorrow's pickups.
+  const dueOrders = openOrders(addDays(today(), 2));
 
   return (
     <div className="space-y-8">
@@ -128,6 +132,32 @@ export default async function HomePage() {
             <div className="text-sm text-muted">{t.home.missingPrices}</div>
           </Link>
         </div>
+      )}
+
+      {dueOrders.length > 0 && (
+        <section>
+          <h2 className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted">
+            {t.home.upcomingOrders}
+            <Link href="/orders" className="normal-case tracking-normal underline underline-offset-4">{t.nav.orders}</Link>
+          </h2>
+          <ul className="card divide-y divide-line overflow-hidden">
+            {dueOrders.map((o) => (
+              <li key={o.id}>
+                <Link href={`/orders/${o.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-cream">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium">{o.customerName}</span>{" "}
+                    <span className="text-xs text-muted">· {t.orders.occasions[o.occasion]}</span>
+                  </span>
+                  <span className={`text-sm ${o.pickupDate < today() ? "font-semibold text-bad" : "text-muted"}`}>
+                    {o.pickupDate < today() ? t.orders.late : o.pickupDate === today() ? t.orders.today : t.orders.tomorrow}
+                    {o.pickupTime && ` · ${o.pickupTime}`}
+                  </span>
+                  <OrderStatusChip status={o.status} t={t.orders} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section>

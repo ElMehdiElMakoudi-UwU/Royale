@@ -31,6 +31,13 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M8 18h8M12 14v4M7 8h4" />
     </>
   ),
+  orders: (
+    <>
+      <path d="M4 20h16M5 20v-6h14v6" />
+      <path d="M7 14v-3h10v3" />
+      <path d="M12 11V8M12 5.5v.01" />
+    </>
+  ),
   tickets: (
     <>
       <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z" />

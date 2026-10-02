@@ -37,6 +37,7 @@ export default async function ReportPage({ searchParams }: PageProps<"/report">)
       <div className="max-w-2xl space-y-4">
         <div className="card divide-y divide-line overflow-hidden">
           <Line title={tr.sales} hint={`${r.closingDays} ${tr.days}`} value={r.sales} sign="+" href="/cash" />
+          {r.orderTransfers > 0 && <Line title={tr.orderTransfers} value={r.orderTransfers} sign="+" href="/orders?view=delivered" />}
           <Line title={tr.purchases} hint={`${r.notes} ${tr.notes}`} value={r.purchases} sign="−" href="/factory" />
           <Line title={tr.expenses} value={r.expenses.total} sign="−" href={`/expenses?month=${month}`} />
           {expenseCats.length > 0 && (

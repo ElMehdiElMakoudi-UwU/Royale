@@ -170,15 +170,24 @@ export function monthResult(month: string) {
     .all();
   const purchases = notes.reduce((s, n) => s + (n.acceptedTotal ?? 0), 0);
 
+  // Order payments by transfer never go through the till, so they aren't in the closings.
+  const orderTransfers = db
+    .select()
+    .from(schema.orderPayments)
+    .where(and(eq(schema.orderPayments.method, "transfer"), inMonth(schema.orderPayments.date, month)))
+    .all()
+    .reduce((s, p) => s + p.amount, 0);
+
   const expenses = monthExpenses(month);
   const salaries = monthSalaries(month);
   return {
     sales,
+    orderTransfers,
     closingDays: closings.length,
     purchases,
     notes: notes.length,
     expenses,
     salaries,
-    result: sales - purchases - expenses.total - salaries.total,
+    result: sales + orderTransfers - purchases - expenses.total - salaries.total,
   };
 }

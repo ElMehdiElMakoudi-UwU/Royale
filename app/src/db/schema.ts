@@ -303,3 +303,75 @@ export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+export const OCCASIONS = ["birthday", "wedding", "engagement", "birth", "eid", "ramadan", "other"] as const;
+export const ORDER_STATUSES = ["pending", "ready", "delivered", "cancelled"] as const;
+export const ORDER_PAYMENT_METHODS = ["cash", "card", "transfer"] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/** Customer orders for special occasions (birthday cake, Eid boxes…), picked up or delivered on a set day. */
+export const orders = sqliteTable(
+  "orders",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerName: text("customer_name").notNull(),
+    customerPhone: text("customer_phone").notNull().default(""),
+    occasion: text("occasion", { enum: OCCASIONS }).notNull(),
+    // Day (YYYY-MM-DD) and optional time (HH:MM) the customer collects the order.
+    pickupDate: text("pickup_date").notNull(),
+    pickupTime: text("pickup_time"),
+    // Empty = collected at the shop.
+    deliveryAddress: text("delivery_address").notNull().default(""),
+    status: text("status", { enum: ORDER_STATUSES }).notNull().default("pending"),
+    // Σ line totals, in centimes.
+    total: integer("total").notNull(),
+    // Details for the kitchen: writing on the cake, flavours, colours…
+    note: text("note").notNull().default(""),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("orders_pickup_idx").on(t.pickupDate)],
+);
+
+export const orderLines = sqliteTable(
+  "order_lines",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    // Catalog product, or null for a custom item (e.g. "Pièce montée 3 étages").
+    productId: integer("product_id").references(() => products.id),
+    label: text("label").notNull(),
+    qty: real("qty").notNull(),
+    unitPrice: integer("unit_price").notNull(),
+    total: integer("total").notNull(),
+  },
+  (t) => [index("order_lines_order_idx").on(t.orderId)],
+);
+
+/** Deposits and balance payments. Cash and card ones are taken at the till, so they're in that day's closing. */
+export const orderPayments = sqliteTable(
+  "order_payments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    amount: integer("amount").notNull(),
+    method: text("method", { enum: ORDER_PAYMENT_METHODS }).notNull(),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("order_payments_order_idx").on(t.orderId), index("order_payments_date_idx").on(t.date)],
+);
+
+export type Order = typeof orders.$inferSelect;
+export type OrderLine = typeof orderLines.$inferSelect;
+export type OrderPayment = typeof orderPayments.$inferSelect;

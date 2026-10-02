@@ -10,6 +10,7 @@ export function navItems(user: User, t: Dict): NavItem[] {
       { href: "/pos", key: "pos", label: t.nav.pos },
       { href: "/counts", key: "counts", label: t.nav.counts },
       { href: "/cash", key: "cash", label: t.nav.cash },
+      { href: "/orders", key: "orders", label: t.nav.orders },
       { href: "/tickets", key: "tickets", label: t.nav.tickets, mobile: false },
     ];
   }
@@ -20,6 +21,7 @@ export function navItems(user: User, t: Dict): NavItem[] {
     { href: "/cash", key: "cash", label: t.nav.cash },
     { href: "/sales", key: "sales", label: t.nav.sales },
     { href: "/deliveries", key: "deliveries", label: t.nav.deliveries },
+    { href: "/orders", key: "orders", label: t.nav.orders, mobile: false },
     { href: "/factory", key: "factory", label: t.nav.factory, mobile: false },
     { href: "/expenses", key: "expenses", label: t.nav.expenses, mobile: false },
     { href: "/salaries", key: "salaries", label: t.nav.salaries, mobile: false, desktop: false },

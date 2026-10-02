@@ -10,6 +10,7 @@ import { dateLabel, money } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { usersById } from "@/lib/queries";
 import { addDays } from "@/lib/money";
+import { orderPaymentsByDay } from "@/lib/orders";
 import { closingRevenue, posByDay, salesPeriods } from "@/lib/sales";
 
 export default async function ClosingPage({ params, searchParams }: PageProps<"/cash/[id]">) {
@@ -51,9 +52,12 @@ export default async function ClosingPage({ params, searchParams }: PageProps<"/
   }
 
   const period = isOwner ? salesPeriods().find((p) => closing.date >= p.from && closing.date < p.to) : undefined;
-  // When the register was used that day, the till should hold: float + cash sales − payouts.
+  // When the register was used that day, the till should hold: float + cash sales + order payments − payouts.
   const pos = isOwner ? posByDay(closing.date, addDays(closing.date, 1)).days.get(closing.date) : undefined;
-  const expectedCash = pos ? closing.openingFloat + pos.cash - outTotal : null;
+  const orderPaid = isOwner ? orderPaymentsByDay(closing.date, addDays(closing.date, 1)).get(closing.date) : undefined;
+  const orderCash = orderPaid?.cash ?? 0;
+  const expectedCard = (pos?.card ?? 0) + (orderPaid?.card ?? 0);
+  const expectedCash = pos ? closing.openingFloat + pos.cash + orderCash - outTotal : null;
 
   const row = (label: string, value: number, sign = "") => (
     <div className="tabular flex justify-between px-4 py-2.5 text-sm">
@@ -120,11 +124,17 @@ export default async function ClosingPage({ params, searchParams }: PageProps<"/
                 <span className="text-muted">{t.posCompare.posCash}</span>
                 <span>{money(pos.cash)}</span>
               </div>
+              {orderCash > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted">{t.orders.fromOrders} ({t.orders.methods.cash})</span>
+                  <span>{money(orderCash)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted">{tc.card}</span>
-                <span className={pos.card !== closing.card ? "font-semibold text-bad" : ""}>
-                  {money(pos.card)}
-                  {pos.card !== closing.card && <span className="text-xs font-normal text-muted"> ≠ {money(closing.card)}</span>}
+                <span className={expectedCard !== closing.card ? "font-semibold text-bad" : ""}>
+                  {money(expectedCard)}
+                  {expectedCard !== closing.card && <span className="text-xs font-normal text-muted"> ≠ {money(closing.card)}</span>}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -143,6 +153,25 @@ export default async function ClosingPage({ params, searchParams }: PageProps<"/
                 </span>
               </div>
             </div>
+          </div>
+        )}
+
+        {!pos && orderPaid && orderCash + orderPaid.card > 0 && (
+          <div className="card self-start p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">{t.orders.fromOrders}</h2>
+            <div className="tabular space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">{t.orders.methods.cash}</span>
+                <span>{money(orderCash)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">{t.orders.methods.card}</span>
+                <span>{money(orderPaid.card)}</span>
+              </div>
+            </div>
+            <Link href="/orders" className="mt-3 inline-block text-sm font-medium text-cocoa underline underline-offset-4">
+              {t.nav.orders}
+            </Link>
           </div>
         )}
 

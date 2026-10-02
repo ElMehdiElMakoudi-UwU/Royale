@@ -61,3 +61,26 @@ export function ReprintButton({
     </>
   );
 }
+
+/** Prints any receipt-sized content (e.g. an order slip) through the same 80 mm print stylesheet. */
+export function PrintButton({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+  const [printing, setPrinting] = useState(false);
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const print = () => {
+    setPrinting(true);
+    const done = () => {
+      setPrinting(false);
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    printReceipt();
+  };
+  return (
+    <>
+      {mounted && printing && createPortal(<div id="receipt-root">{children}</div>, document.body)}
+      <button type="button" onClick={print} className={className ?? "btn-ghost"}>
+        {label}
+      </button>
+    </>
+  );
+}

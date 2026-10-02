@@ -68,6 +68,15 @@ days without a closing, products without a sale price, products counted only onc
 - Owner can void a ticket (with a reason) in Tickets. Voided tickets are excluded everywhere.
 - With the register in use, the cash closing shows the expected cash (float + cash sales − payouts) against the cash counted, and the Ventes page shows the stock gap: what left the stock but was never rung up.
 
+## Special orders
+
+`/orders` records customer orders for an occasion (birthday, wedding, Eid, Ramadan…): customer and phone, pickup day and time,
+optional home delivery, catalog or custom items with their price, and details for the kitchen (writing on the cake…).
+
+- Status: *à préparer* → *prête* → *remise*. Only the owner cancels, reopens or deletes. Open orders are listed by pickup day; late, today's and tomorrow's ones show on the home page.
+- Deposits and balance payments are recorded on the order, **not** rung up on the register. Cash and card payments go in the till, so the cash closing adds them to the expected cash and card. Transfers don't go through the till and are added to the monthly result.
+- "Imprimer le bon" prints an 80 mm order slip for the customer (total, deposit, balance due).
+
 ## How delivery notes are checked
 
 A note is compared with the delivery count(s) of the same date and with the catalog's agreed purchase prices:
