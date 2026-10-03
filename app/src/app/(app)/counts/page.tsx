@@ -35,6 +35,7 @@ export default async function CountsPage({ searchParams }: PageProps<"/counts">)
   return (
     <>
       <PageHeader title={t.counts.title}>
+        <Link href="/print/count-sheet" className="btn-ghost">{t.counts.sheet}</Link>
         <Link href="/counts/new?type=delivery" className="btn-ghost">+ {t.counts.delivery}</Link>
         <Link href="/counts/new?type=stock" className="btn-primary">+ {t.counts.stock}</Link>
       </PageHeader>

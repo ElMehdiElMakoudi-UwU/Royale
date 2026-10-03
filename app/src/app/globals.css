@@ -97,3 +97,12 @@ input[type="number"] {
   body.print-receipt > *:not(#receipt-root) { display: none !important; }
   body.print-receipt #receipt-root { display: block; padding: 2mm 4mm; }
 }
+
+/* ---------- Count sheet (A4, filled by hand) ---------- */
+.count-sheet { page: count-sheet; color: #000; }
+.count-sheet .sheet-row { break-inside: avoid; }
+@media print {
+  /* Named page beats the 80 mm receipt @page above. */
+  @page count-sheet { size: A4 portrait; margin: 10mm; }
+  .count-sheet thead { display: table-header-group; }
+}
