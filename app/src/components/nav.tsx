@@ -117,19 +117,29 @@ export function TopNav({ items: all, moreLabel }: { items: NavItem[]; moreLabel:
   if (items.length < all.length) items.push({ href: "/more", key: "more", label: moreLabel });
   return (
     <nav className="hidden items-center gap-1 md:flex">
-      {items.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          title={item.label}
-          className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition ${
-            isActive(pathname, item.href) ? "bg-gold-soft text-cocoa" : "text-muted hover:text-cocoa"
-          }`}
-        >
-          <Icon name={item.key} />
-          {isActive(pathname, item.href) && <span className="hidden lg:inline">{item.label}</span>}
-        </Link>
-      ))}
+      {items.map((item) => {
+        const active = isActive(pathname, item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-label={item.label}
+            className={`group flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+              active ? "bg-gold-soft text-cocoa" : "text-muted hover:bg-gold-soft/60 hover:text-cocoa focus-visible:bg-gold-soft/60 focus-visible:text-cocoa"
+            }`}
+          >
+            <Icon name={item.key} />
+            {/* Collapsed to the icon; the label slides out on hover/focus (and stays out for the active item on wide screens). */}
+            <span
+              className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out group-hover:ms-2 group-hover:max-w-40 group-hover:opacity-100 group-focus-visible:ms-2 group-focus-visible:max-w-40 group-focus-visible:opacity-100 ${
+                active ? "max-w-0 opacity-0 lg:ms-2 lg:max-w-40 lg:opacity-100" : "max-w-0 opacity-0"
+              }`}
+            >
+              {item.label}
+            </span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }
