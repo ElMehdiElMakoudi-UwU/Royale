@@ -1,18 +1,18 @@
 import { addCategory, addExpense, classifyOutflow, deleteExpense } from "./actions";
 import { ConfirmButton } from "@/components/confirm-button";
 import { MonthNav, PageHeader, SectionTitle } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, label, money, monthLabel, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { isMonth, monthExpenses, monthOf, nextMonth, prevMonth } from "@/lib/money";
+import { requireOwnerShop } from "@/lib/shop";
 
 export default async function ExpensesPage({ searchParams }: PageProps<"/expenses">) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const te = t.expenses;
   const sp = (await searchParams).month;
   const month = isMonth(sp) ? sp : monthOf(today());
-  const data = monthExpenses(month);
+  const data = monthExpenses(shop.id, month);
   const catName = new Map(data.categories.map((c) => [c.id, label(c, locale)]));
   const notExpense = new Set(data.categories.filter((c) => !c.isExpense).map((c) => c.id));
   const defaultDate = monthOf(today()) === month ? today() : `${month}-01`;

@@ -1,12 +1,12 @@
 import { addPeriodStart, removePeriodStart, saveResultSettings } from "./actions";
 import { ResultsGrid } from "./results-grid";
 import { MonthNav, PageHeader, SectionTitle } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, money, monthLabel, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { isMonth, monthOf, nextMonth, prevMonth } from "@/lib/money";
 import { monthResultsData } from "@/lib/results";
 import { monthDates, monthPeriods } from "@/lib/results-calc";
+import { requireOwnerShop } from "@/lib/shop";
 
 function Line({ title, hint, value, sign }: { title: string; hint?: string; value: number; sign: "+" | "−" }) {
   return (
@@ -46,12 +46,12 @@ function Stat({ title, hint, value }: { title: string; hint?: string; value: str
 const signedClass = (n: number) => (n < 0 ? "text-bad" : "");
 
 export default async function ResultsPage({ searchParams }: PageProps<"/results">) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const tr = t.results;
   const sp = (await searchParams).month;
   const month = isMonth(sp) ? sp : monthOf(today());
-  const { days, periodStarts, charges, fixedTotal, markupPct, results: r } = monthResultsData(month);
+  const { days, periodStarts, charges, fixedTotal, markupPct, results: r } = monthResultsData(shop.id, month);
   const dates = monthDates(month);
   const periods = monthPeriods(month, periodStarts);
   const dayList = (list: string[]) => list.map((d) => dateLabel(d, locale)).join(", ");
@@ -181,10 +181,10 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
           <SectionTitle>{tr.gridTitle}</SectionTitle>
           <p className="mb-2 text-xs text-muted">{tr.gridHint}</p>
           {/* Keyed so the typed values reset when the month or the periods change. */}
-          <ResultsGrid key={`${month}|${periodStarts.join()}`} t={tr} locale={locale} dates={dates} periods={periods} days={days} />
+          <ResultsGrid key={`${shop.id}|${month}|${periodStarts.join()}`} t={tr} locale={locale} dates={dates} periods={periods} days={days} />
         </section>
 
-        <form key={month} action={saveResultSettings} className="card max-w-xl space-y-3 p-4">
+        <form key={`${shop.id}|${month}`} action={saveResultSettings} className="card max-w-xl space-y-3 p-4">
           <input type="hidden" name="month" value={month} />
           <h2 className="font-semibold text-cocoa">{tr.settingsTitle}</h2>
           <p className="text-xs text-muted">{tr.settingsHint}</p>

@@ -1,18 +1,19 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { ClosingForm } from "../closing-form";
 import { db, schema } from "@/db";
 import { PageHeader } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
+import { requireShop } from "@/lib/shop";
 
 export default async function NewClosingPage() {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t } = await getDict();
   // The morning float is usually the same every day: start from the last one.
   const last = db
     .select({ openingFloat: schema.cashClosings.openingFloat })
     .from(schema.cashClosings)
+    .where(eq(schema.cashClosings.shopId, shop.id))
     .orderBy(desc(schema.cashClosings.date))
     .get();
 

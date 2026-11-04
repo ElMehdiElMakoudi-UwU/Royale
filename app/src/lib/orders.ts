@@ -6,8 +6,8 @@ import { label } from "./format";
 import type { Locale } from "./i18n";
 import { groupProducts, listCategories, listProducts } from "./queries";
 
-export function getOrder(id: number) {
-  const order = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+export function getOrder(id: number, shopId: number) {
+  const order = db.select().from(schema.orders).where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId))).get();
   if (!order) return null;
   const lines = db
     .select()
@@ -36,12 +36,13 @@ export function paidByOrder(orderIds: number[]) {
 }
 
 /** Orders still to hand over (pending or ready), soonest first; `before` limits to pickups before that day. */
-export function openOrders(before?: string): Order[] {
+export function openOrders(shopId: number, before?: string): Order[] {
   return db
     .select()
     .from(schema.orders)
     .where(
       and(
+        eq(schema.orders.shopId, shopId),
         inArray(schema.orders.status, ["pending", "ready"]),
         before ? lt(schema.orders.pickupDate, before) : undefined,
       ),
@@ -54,13 +55,15 @@ export function openOrders(before?: string): Order[] {
  * Order payments taken at the till per day, by method. They are in the till's cash and card
  * totals but not on the register, so the cash closing adds them to what the till should hold.
  */
-export function orderPaymentsByDay(from: string, toExclusive: string) {
+export function orderPaymentsByDay(shopId: number, from: string, toExclusive: string) {
   const days = new Map<string, { cash: number; card: number; transfer: number }>();
   const rows = db
-    .select()
+    .select({ payment: schema.orderPayments })
     .from(schema.orderPayments)
-    .where(and(gte(schema.orderPayments.date, from), lt(schema.orderPayments.date, toExclusive)))
-    .all();
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.orderPayments.orderId))
+    .where(and(eq(schema.orders.shopId, shopId), gte(schema.orderPayments.date, from), lt(schema.orderPayments.date, toExclusive)))
+    .all()
+    .map((r) => r.payment);
   for (const p of rows) {
     const d = days.get(p.date) ?? { cash: 0, card: 0, transfer: 0 };
     d[p.method] += p.amount;

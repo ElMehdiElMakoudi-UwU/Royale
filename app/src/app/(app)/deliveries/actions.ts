@@ -9,11 +9,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { dataDir, db, schema } from "@/db";
-import { requireOwner } from "@/lib/auth";
 import { aiEnabled, extractDeliveryNote } from "@/lib/extract";
 import { parseMoney, today } from "@/lib/format";
 import { listProducts } from "@/lib/queries";
 import { matchProduct, normalizeName } from "@/lib/reconcile";
+import { requireOwnerShop } from "@/lib/shop";
 
 const photoDir = (deliveryId: number) => path.join(dataDir, "uploads", "deliveries", String(deliveryId));
 
@@ -24,10 +24,10 @@ function revalidate(id?: number) {
 }
 
 export async function createDelivery() {
-  const owner = await requireOwner();
+  const { owner, shop } = await requireOwnerShop();
   const row = db
     .insert(schema.deliveries)
-    .values({ date: today(), createdBy: owner.id })
+    .values({ shopId: shop.id, date: today(), createdBy: owner.id })
     .returning({ id: schema.deliveries.id })
     .get();
   redirect(`/deliveries/${row.id}/edit`);
@@ -54,10 +54,10 @@ export type SaveDeliveryInput = z.infer<typeof saveSchema>;
 export type SaveDeliveryResult = { ok: true } | { ok: false; error: "invalid" | "locked" | "duplicate"; otherId?: number };
 
 export async function saveDelivery(id: number, input: SaveDeliveryInput): Promise<SaveDeliveryResult> {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const existing = db.select().from(schema.deliveries).where(eq(schema.deliveries.id, id)).get();
+  const existing = db.select().from(schema.deliveries).where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.shopId, shop.id))).get();
   if (!existing || existing.status !== "draft") return { ok: false, error: "locked" };
 
   const { lines, ...header } = parsed.data;
@@ -66,7 +66,7 @@ export async function saveDelivery(id: number, input: SaveDeliveryInput): Promis
     const other = db
       .select({ id: schema.deliveries.id })
       .from(schema.deliveries)
-      .where(and(eq(schema.deliveries.blNumber, blNumber), ne(schema.deliveries.id, id)))
+      .where(and(eq(schema.deliveries.shopId, shop.id), eq(schema.deliveries.blNumber, blNumber), ne(schema.deliveries.id, id)))
       .get();
     if (other) return { ok: false, error: "duplicate", otherId: other.id };
   }
@@ -119,8 +119,8 @@ export type UploadResult =
 
 /** Stores the photos of a delivery note and, when asked, reads them with Claude. */
 export async function uploadPhotos(id: number, form: FormData): Promise<UploadResult> {
-  await requireOwner();
-  const delivery = db.select().from(schema.deliveries).where(eq(schema.deliveries.id, id)).get();
+  const { shop } = await requireOwnerShop();
+  const delivery = db.select().from(schema.deliveries).where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.shopId, shop.id))).get();
   if (!delivery) return { ok: false, error: "invalid" };
   if (delivery.status !== "draft") return { ok: false, error: "locked" };
 
@@ -176,8 +176,13 @@ export async function uploadPhotos(id: number, form: FormData): Promise<UploadRe
 }
 
 export async function deletePhoto(photoId: number) {
-  await requireOwner();
-  const photo = db.select().from(schema.deliveryPhotos).where(eq(schema.deliveryPhotos.id, photoId)).get();
+  const { shop } = await requireOwnerShop();
+  const photo = db
+    .select({ id: schema.deliveryPhotos.id, deliveryId: schema.deliveryPhotos.deliveryId, filename: schema.deliveryPhotos.filename })
+    .from(schema.deliveryPhotos)
+    .innerJoin(schema.deliveries, eq(schema.deliveries.id, schema.deliveryPhotos.deliveryId))
+    .where(and(eq(schema.deliveryPhotos.id, photoId), eq(schema.deliveries.shopId, shop.id)))
+    .get();
   if (!photo) return;
   fs.rmSync(path.join(photoDir(photo.deliveryId), photo.filename), { force: true });
   db.delete(schema.deliveryPhotos).where(eq(schema.deliveryPhotos.id, photoId)).run();
@@ -185,7 +190,7 @@ export async function deletePhoto(photoId: number) {
 }
 
 export async function validateDelivery(id: number, form: FormData) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   let accepted: number | null;
   try {
     accepted = parseMoney(form.get("acceptedTotal"));
@@ -195,23 +200,23 @@ export async function validateDelivery(id: number, form: FormData) {
   if (accepted == null) return;
   db.update(schema.deliveries)
     .set({ status: "checked", acceptedTotal: accepted, checkedAt: new Date().toISOString() })
-    .where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.status, "draft")))
+    .where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.shopId, shop.id), eq(schema.deliveries.status, "draft")))
     .run();
   revalidate(id);
 }
 
 export async function reopenDelivery(id: number) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   db.update(schema.deliveries)
     .set({ status: "draft", acceptedTotal: null, checkedAt: null })
-    .where(eq(schema.deliveries.id, id))
+    .where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.shopId, shop.id)))
     .run();
   revalidate(id);
 }
 
 export async function deleteDelivery(id: number) {
-  await requireOwner();
-  const d = db.select().from(schema.deliveries).where(eq(schema.deliveries.id, id)).get();
+  const { shop } = await requireOwnerShop();
+  const d = db.select().from(schema.deliveries).where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.shopId, shop.id))).get();
   if (!d || d.status !== "draft") return;
   db.delete(schema.deliveries).where(eq(schema.deliveries.id, id)).run();
   fs.rmSync(photoDir(id), { recursive: true, force: true });

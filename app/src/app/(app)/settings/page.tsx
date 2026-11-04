@@ -1,14 +1,15 @@
 import { revalidatePath } from "next/cache";
 import { PageHeader } from "@/components/ui";
 import { Receipt } from "@/components/receipt";
-import { requireOwner } from "@/lib/auth";
+import { label } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { getSettings, saveSettings } from "@/lib/settings";
+import { requireOwnerShop } from "@/lib/shop";
 
 async function save(form: FormData) {
   "use server";
-  await requireOwner();
-  saveSettings({
+  const { shop } = await requireOwnerShop();
+  saveSettings(shop.id, {
     receiptHeader: String(form.get("receiptHeader") ?? "").trim().slice(0, 500),
     receiptFooter: String(form.get("receiptFooter") ?? "").trim().slice(0, 500),
     autoPrint: form.get("autoPrint") === "on",
@@ -18,14 +19,14 @@ async function save(form: FormData) {
 }
 
 export default async function SettingsPage() {
-  await requireOwner();
-  const { t } = await getDict();
+  const { shop } = await requireOwnerShop();
+  const { t, locale } = await getDict();
   const ts = t.settings;
-  const s = getSettings();
+  const s = getSettings(shop.id);
 
   return (
     <>
-      <PageHeader title={ts.title} />
+      <PageHeader title={ts.title} subtitle={label(shop, locale)} />
       <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
         <form action={save} className="card max-w-xl space-y-4 p-5">
           <h2 className="font-semibold text-cocoa">{ts.receipt}</h2>

@@ -47,7 +47,7 @@ const sign = (kind: "opening" | "payment" | "credit") => (kind === "opening" ? 1
  * Factory account by week (Monday → Sunday): what we owe goes up with each validated
  * delivery note (amount accepted after checking) and down with payments and credit notes.
  */
-export function factoryAccount() {
+export function factoryAccount(shopId: number) {
   const notes = db
     .select({
       id: schema.deliveries.id,
@@ -57,11 +57,11 @@ export function factoryAccount() {
       acceptedTotal: schema.deliveries.acceptedTotal,
     })
     .from(schema.deliveries)
-    .where(eq(schema.deliveries.status, "checked"))
+    .where(and(eq(schema.deliveries.shopId, shopId), eq(schema.deliveries.status, "checked")))
     .orderBy(asc(schema.deliveries.date))
     .all();
-  const entries = db.select().from(schema.factoryEntries).orderBy(asc(schema.factoryEntries.date), asc(schema.factoryEntries.id)).all();
-  const drafts = db.select().from(schema.deliveries).where(eq(schema.deliveries.status, "draft")).all();
+  const entries = db.select().from(schema.factoryEntries).where(eq(schema.factoryEntries.shopId, shopId)).orderBy(asc(schema.factoryEntries.date), asc(schema.factoryEntries.id)).all();
+  const drafts = db.select().from(schema.deliveries).where(and(eq(schema.deliveries.shopId, shopId), eq(schema.deliveries.status, "draft"))).all();
 
   const dates = [...notes.map((n) => n.date), ...entries.map((e) => e.date)];
   const weeks: FactoryWeek[] = [];
@@ -92,19 +92,19 @@ export function factoryAccount() {
 const inMonth = (column: Parameters<typeof gte>[0], month: string) =>
   and(gte(column, `${month}-01`), lt(column, `${nextMonth(month)}-01`));
 
-export function monthExpenses(month: string) {
+export function monthExpenses(shopId: number, month: string) {
   const categories = db.select().from(schema.expenseCategories).orderBy(asc(schema.expenseCategories.sort)).all();
   const expenses = db
     .select()
     .from(schema.expenses)
-    .where(inMonth(schema.expenses.date, month))
+    .where(and(eq(schema.expenses.shopId, shopId), inMonth(schema.expenses.date, month)))
     .orderBy(asc(schema.expenses.date), asc(schema.expenses.id))
     .all();
   const outflows = db
     .select({ outflow: schema.cashOutflows, date: schema.cashClosings.date })
     .from(schema.cashOutflows)
     .innerJoin(schema.cashClosings, eq(schema.cashClosings.id, schema.cashOutflows.closingId))
-    .where(inMonth(schema.cashClosings.date, month))
+    .where(and(eq(schema.cashClosings.shopId, shopId), inMonth(schema.cashClosings.date, month)))
     .orderBy(asc(schema.cashClosings.date))
     .all()
     .map((r) => ({ ...r.outflow, date: r.date }));
@@ -127,14 +127,16 @@ export function monthExpenses(month: string) {
   };
 }
 
-export function monthSalaries(month: string) {
-  const employees = db.select().from(schema.employees).orderBy(asc(schema.employees.name)).all();
+export function monthSalaries(shopId: number, month: string) {
+  const employees = db.select().from(schema.employees).where(eq(schema.employees.shopId, shopId)).orderBy(asc(schema.employees.name)).all();
   const payments = db
-    .select()
+    .select({ payment: schema.salaryPayments })
     .from(schema.salaryPayments)
-    .where(eq(schema.salaryPayments.month, month))
+    .innerJoin(schema.employees, eq(schema.employees.id, schema.salaryPayments.employeeId))
+    .where(and(eq(schema.employees.shopId, shopId), eq(schema.salaryPayments.month, month)))
     .orderBy(asc(schema.salaryPayments.date))
-    .all();
+    .all()
+    .map((r) => r.payment);
   const rows = employees
     .map((e) => {
       const mine = payments.filter((p) => p.employeeId === e.id);
@@ -158,28 +160,33 @@ export function monthSalaries(month: string) {
 }
 
 /** Simple monthly result, based on money declared and money spent. */
-export function monthResult(month: string) {
-  const closings = db.select().from(schema.cashClosings).where(inMonth(schema.cashClosings.date, month)).all();
+export function monthResult(shopId: number, month: string) {
+  const closings = db
+    .select()
+    .from(schema.cashClosings)
+    .where(and(eq(schema.cashClosings.shopId, shopId), inMonth(schema.cashClosings.date, month)))
+    .all();
   const outflows = outflowTotals(closings.map((c) => c.id));
   const sales = closings.reduce((s, c) => s + closingRevenue(c, outflows.get(c.id) ?? 0), 0);
 
   const notes = db
     .select()
     .from(schema.deliveries)
-    .where(and(eq(schema.deliveries.status, "checked"), inMonth(schema.deliveries.date, month)))
+    .where(and(eq(schema.deliveries.shopId, shopId), eq(schema.deliveries.status, "checked"), inMonth(schema.deliveries.date, month)))
     .all();
   const purchases = notes.reduce((s, n) => s + (n.acceptedTotal ?? 0), 0);
 
   // Order payments by transfer never go through the till, so they aren't in the closings.
   const orderTransfers = db
-    .select()
+    .select({ amount: schema.orderPayments.amount })
     .from(schema.orderPayments)
-    .where(and(eq(schema.orderPayments.method, "transfer"), inMonth(schema.orderPayments.date, month)))
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.orderPayments.orderId))
+    .where(and(eq(schema.orders.shopId, shopId), eq(schema.orderPayments.method, "transfer"), inMonth(schema.orderPayments.date, month)))
     .all()
     .reduce((s, p) => s + p.amount, 0);
 
-  const expenses = monthExpenses(month);
-  const salaries = monthSalaries(month);
+  const expenses = monthExpenses(shopId, month);
+  const salaries = monthSalaries(shopId, month);
   return {
     sales,
     orderTransfers,

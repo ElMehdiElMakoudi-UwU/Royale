@@ -14,6 +14,8 @@ export type FormGroup = {
 
 type Props = {
   t: Pick<Dict, "counts" | "common" | "units">;
+  /** Drafts are kept per shop, so the owner's draft for one never shows up in the other. */
+  shopId: number;
   type: CountType;
   groups: FormGroup[];
   canPickDate: boolean;
@@ -33,9 +35,9 @@ function parseQty(raw: string | undefined) {
   return Number.isFinite(n) && n >= 0 ? n : NaN;
 }
 
-export function CountForm({ t, type, groups, canPickDate, defaultDate, edit }: Props) {
+export function CountForm({ t, shopId, type, groups, canPickDate, defaultDate, edit }: Props) {
   const router = useRouter();
-  const draftKey = edit ? null : `count-draft:${type}`;
+  const draftKey = edit ? null : `count-draft:${shopId}:${type}`;
   const [values, setValues] = useState<Record<number, string>>(() =>
     edit ? Object.fromEntries(Object.entries(edit.values).map(([k, v]) => [k, String(v)])) : {},
   );

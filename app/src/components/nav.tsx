@@ -81,6 +81,19 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M4 10h16M4 15h16M10 10v10" />
     </>
   ),
+  recap: (
+    <>
+      <path d="M3 21V9l5-4 5 4v12" />
+      <path d="M13 21v-9l4-3 4 3v9" />
+      <path d="M2 21h20M7 13h2M7 17h2" />
+    </>
+  ),
+  shopReport: (
+    <>
+      <path d="M11 4a8.5 8.5 0 1 0 9 9h-9z" />
+      <path d="M15 3.5a6 6 0 0 1 5.5 5.5H15z" />
+    </>
+  ),
   more: (
     <>
       <circle cx="5" cy="12" r="1.3" />
@@ -130,7 +143,7 @@ export function TopNav({ items: all, moreLabel }: { items: NavItem[]; moreLabel:
             key={item.href}
             href={item.href}
             aria-label={item.label}
-            className={`group flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+            className={`group flex items-center rounded-lg px-1.5 py-2 text-sm font-medium transition-colors lg:px-2.5 ${
               active ? "bg-gold-soft text-cocoa" : "text-muted hover:bg-gold-soft/60 hover:text-cocoa focus-visible:bg-gold-soft/60 focus-visible:text-cocoa"
             }`}
           >

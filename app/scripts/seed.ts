@@ -9,17 +9,14 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
 import { count } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { openDb } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
 import type { Unit } from "../src/db/schema";
 
 const dataDir = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
 const sqlite = new Database(path.join(dataDir, "royale.db"));
-sqlite.pragma("foreign_keys = ON");
-const db = drizzle(sqlite, { schema });
-migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+const db = openDb(sqlite);
 
 const CATEGORIES = [
   { key: "vien", nameFr: "Viennoiserie", nameAr: "مخبوزات" },

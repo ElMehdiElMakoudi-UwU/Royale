@@ -32,11 +32,11 @@ export type SoldLine = {
 };
 
 /** Register sales (non-voided) per day: totals by payment method. */
-export function posByDay(from: string, toExclusive: string) {
+export function posByDay(shopId: number, from: string, toExclusive: string) {
   const rows = db
     .select()
     .from(schema.posSales)
-    .where(and(eq(schema.posSales.status, "completed"), gte(schema.posSales.date, from), lt(schema.posSales.date, toExclusive)))
+    .where(and(eq(schema.posSales.shopId, shopId), eq(schema.posSales.status, "completed"), gte(schema.posSales.date, from), lt(schema.posSales.date, toExclusive)))
     .all();
   const days = new Map<string, { cash: number; card: number; count: number }>();
   for (const r of rows) {
@@ -79,11 +79,11 @@ export type SalesPeriod = {
  *   expected sales = (opening stock + validated deliveries − closing stock) × sale price
  * with the revenue declared in the cash closings of the same days.
  */
-export function salesPeriods(limit = 60): SalesPeriod[] {
+export function salesPeriods(shopId: number, limit = 60): SalesPeriod[] {
   const stockCounts = db
     .select()
     .from(schema.counts)
-    .where(and(eq(schema.counts.type, "stock"), eq(schema.counts.status, "validated")))
+    .where(and(eq(schema.counts.shopId, shopId), eq(schema.counts.type, "stock"), eq(schema.counts.status, "validated")))
     .orderBy(asc(schema.counts.date), asc(schema.counts.id))
     .all();
   // Keep the last count of each day.
@@ -94,7 +94,7 @@ export function salesPeriods(limit = 60): SalesPeriod[] {
   const first = stocks[0].date;
   const last = stocks[stocks.length - 1].date;
 
-  const deliveryCounts = db.select().from(schema.counts).where(eq(schema.counts.type, "delivery")).all()
+  const deliveryCounts = db.select().from(schema.counts).where(and(eq(schema.counts.shopId, shopId), eq(schema.counts.type, "delivery"))).all()
     .filter((c) => c.date >= first && c.date < last);
   const countIds = [...stocks.map((c) => c.id), ...deliveryCounts.filter((c) => c.status === "validated").map((c) => c.id)];
   const lines = db.select().from(schema.countLines).where(inArray(schema.countLines.countId, countIds)).all();
@@ -105,9 +105,9 @@ export function salesPeriods(limit = 60): SalesPeriod[] {
   }
 
   const products = new Map(db.select().from(schema.products).all().map((p) => [p.id, p]));
-  const closings = db.select().from(schema.cashClosings).all().filter((c) => c.date >= first && c.date < last);
+  const closings = db.select().from(schema.cashClosings).where(eq(schema.cashClosings.shopId, shopId)).all().filter((c) => c.date >= first && c.date < last);
   const outflows = outflowTotals(closings.map((c) => c.id));
-  const pos = posByDay(first, last);
+  const pos = posByDay(shopId, first, last);
   const posLines = pos.rows.length
     ? db.select().from(schema.posSaleLines).where(inArray(schema.posSaleLines.saleId, pos.rows.map((r) => r.id))).all()
     : [];

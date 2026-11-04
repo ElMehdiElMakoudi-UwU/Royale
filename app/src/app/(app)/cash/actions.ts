@@ -4,8 +4,8 @@ import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, schema } from "@/db";
-import { requireOwner, requireUser } from "@/lib/auth";
 import { today } from "@/lib/format";
+import { requireOwnerShop, requireShop } from "@/lib/shop";
 
 const money = z.number().int().min(0).max(100_000_000);
 const closingSchema = z.object({
@@ -28,7 +28,7 @@ function revalidate(id?: number) {
 
 /** Creates a closing, or (owner only) corrects one that isn't validated yet. */
 export async function saveClosing(id: number | null, input: ClosingInput): Promise<ClosingResult> {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const parsed = closingSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const { outflows, ...data } = parsed.data;
@@ -38,13 +38,13 @@ export async function saveClosing(id: number | null, input: ClosingInput): Promi
 
   if (id != null) {
     if (!isOwner) return { ok: false, error: "locked" };
-    const existing = db.select().from(schema.cashClosings).where(eq(schema.cashClosings.id, id)).get();
+    const existing = db.select().from(schema.cashClosings).where(and(eq(schema.cashClosings.id, id), eq(schema.cashClosings.shopId, shop.id))).get();
     if (!existing || existing.status === "validated") return { ok: false, error: "locked" };
   }
   const clash = db
     .select({ id: schema.cashClosings.id })
     .from(schema.cashClosings)
-    .where(id == null ? eq(schema.cashClosings.date, data.date) : and(eq(schema.cashClosings.date, data.date), ne(schema.cashClosings.id, id)))
+    .where(and(eq(schema.cashClosings.shopId, shop.id), eq(schema.cashClosings.date, data.date), id == null ? undefined : ne(schema.cashClosings.id, id)))
     .get();
   if (clash) return { ok: false, error: "exists" };
 
@@ -53,7 +53,7 @@ export async function saveClosing(id: number | null, input: ClosingInput): Promi
     if (closingId == null) {
       closingId = tx
         .insert(schema.cashClosings)
-        .values({ ...data, note: data.note.trim(), createdBy: user.id })
+        .values({ ...data, shopId: shop.id, note: data.note.trim(), createdBy: user.id })
         .returning({ id: schema.cashClosings.id })
         .get().id;
     } else {
@@ -71,16 +71,19 @@ export async function saveClosing(id: number | null, input: ClosingInput): Promi
 }
 
 export async function validateClosing(id: number) {
-  const owner = await requireOwner();
+  const { owner, shop } = await requireOwnerShop();
   db.update(schema.cashClosings)
     .set({ status: "validated", validatedBy: owner.id })
-    .where(eq(schema.cashClosings.id, id))
+    .where(and(eq(schema.cashClosings.id, id), eq(schema.cashClosings.shopId, shop.id)))
     .run();
   revalidate(id);
 }
 
 export async function reopenClosing(id: number) {
-  await requireOwner();
-  db.update(schema.cashClosings).set({ status: "submitted", validatedBy: null }).where(eq(schema.cashClosings.id, id)).run();
+  const { shop } = await requireOwnerShop();
+  db.update(schema.cashClosings)
+    .set({ status: "submitted", validatedBy: null })
+    .where(and(eq(schema.cashClosings.id, id), eq(schema.cashClosings.shopId, shop.id)))
+    .run();
   revalidate(id);
 }

@@ -2,18 +2,18 @@ import { addEmployee, addSalaryPayment, deleteSalaryPayment, setEmployeeActive, 
 import { ConfirmButton } from "@/components/confirm-button";
 import { MonthNav, PageHeader } from "@/components/ui";
 import { SALARY_KINDS } from "@/db/schema";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, money, monthLabel, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { isMonth, monthOf, monthSalaries, nextMonth, prevMonth } from "@/lib/money";
+import { requireOwnerShop } from "@/lib/shop";
 
 export default async function SalariesPage({ searchParams }: PageProps<"/salaries">) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const ts = t.salaries;
   const sp = (await searchParams).month;
   const month = isMonth(sp) ? sp : monthOf(today());
-  const { rows, total } = monthSalaries(month);
+  const { rows, total } = monthSalaries(shop.id, month);
   const active = rows.filter((r) => r.employee.active);
 
   return (

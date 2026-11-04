@@ -7,26 +7,26 @@ import { OrderSlip } from "@/components/order-slip";
 import { PrintButton } from "@/components/print-receipt";
 import { PageHeader, SectionTitle } from "@/components/ui";
 import { ORDER_PAYMENT_METHODS } from "@/db/schema";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, money, qty, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import fr from "@/lib/i18n/fr";
 import { getOrder } from "@/lib/orders";
 import { usersById } from "@/lib/queries";
 import { getSettings } from "@/lib/settings";
+import { requireShop } from "@/lib/shop";
 
 export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const to = t.orders;
   const id = Number((await params).id);
-  const order = Number.isInteger(id) ? getOrder(id) : null;
+  const order = Number.isInteger(id) ? getOrder(id, shop.id) : null;
   if (!order) notFound();
 
   const isOwner = user.role === "owner";
   const open = order.status === "pending" || order.status === "ready";
   const names = usersById();
-  const settings = getSettings();
+  const settings = getSettings(shop.id);
   const pickup = `${dateLabel(order.pickupDate, locale)}${order.pickupTime ? ` · ${order.pickupTime}` : ""}`;
   const deliveredMessage =
     order.due > 0 ? `${to.confirmDelivered}\n${to.dueOnDelivery.replace("{due}", money(order.due))}` : to.confirmDelivered;

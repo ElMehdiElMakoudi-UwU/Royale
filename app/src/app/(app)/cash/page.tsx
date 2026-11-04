@@ -1,15 +1,15 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/db";
 import { PageHeader } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, money } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { usersById } from "@/lib/queries";
 import { closingRevenue, outflowTotals } from "@/lib/sales";
+import { requireShop } from "@/lib/shop";
 
 export default async function CashPage({ searchParams }: PageProps<"/cash">) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const { sent } = await searchParams;
   const isOwner = user.role === "owner";
@@ -17,7 +17,7 @@ export default async function CashPage({ searchParams }: PageProps<"/cash">) {
   const rows = db
     .select()
     .from(schema.cashClosings)
-    .where(isOwner ? undefined : eq(schema.cashClosings.createdBy, user.id))
+    .where(and(eq(schema.cashClosings.shopId, shop.id), isOwner ? undefined : eq(schema.cashClosings.createdBy, user.id)))
     .orderBy(desc(schema.cashClosings.date))
     .limit(100)
     .all();

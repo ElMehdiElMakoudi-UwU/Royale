@@ -16,6 +16,8 @@ export function navItems(user: User, t: Dict): NavItem[] {
   }
   return [
     { href: "/", key: "home", label: t.nav.home },
+    { href: "/recap", key: "recap", label: t.nav.recap },
+    { href: "/shop-report", key: "shopReport", label: t.nav.shopReport, mobile: false },
     { href: "/pos", key: "pos", label: t.nav.pos, mobile: false },
     { href: "/counts", key: "counts", label: t.nav.counts, mobile: false },
     { href: "/cash", key: "cash", label: t.nav.cash },

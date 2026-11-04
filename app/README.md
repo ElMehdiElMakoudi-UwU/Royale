@@ -1,6 +1,6 @@
 # Royale
 
-Shop management for the pastry shop: product catalog, staff accounts, stock and delivery counts, delivery-note checking, daily cash closing and cash-gap tracking, weekly factory account, expenses, salaries, a monthly result, a typed results ledger, and a touchscreen cash register (POS). French and Arabic.
+Shop management for the pastry shops (Ksar and Larache): product catalog, staff accounts, stock and delivery counts, delivery-note checking, daily cash closing and cash-gap tracking, weekly factory account, expenses, salaries, a monthly result, a typed results ledger, and a touchscreen cash register (POS). French and Arabic.
 
 Stack: Next.js 16, SQLite (`better-sqlite3` + Drizzle), Tailwind 4. The whole database is one file: `data/royale.db`.
 
@@ -34,7 +34,20 @@ For a test without HTTPS, set `INSECURE_COOKIES=1`.
 
 ## Changing the schema
 
-Edit `src/db/schema.ts`, then `npm run db:generate`. Migrations in `drizzle/` run automatically when the app starts.
+Edit `src/db/schema.ts`, then `npm run db:generate`. Migrations in `drizzle/` run automatically when the app starts, with foreign keys off so that rebuilding a table can't cascade-delete its child rows (`src/db/migrate.ts`).
+
+## Shops
+
+One app and one database serve both shops.
+
+- **Shared:** products, categories, their prices, and expense categories.
+- **Per shop:** counts, delivery notes, the factory account, cash closings, register sales, orders, expenses, employees and salaries, the results ledger, receipt settings.
+- **Staff** are assigned to one shop in Équipe and only ever see and record for that shop.
+- **The owner** picks the shop in the header; every page then shows that shop. A record from the other shop returns "not found" until you switch.
+- **`/recap`** (owner only) shows both shops side by side with totals: today's activity, the month's results and bilan, the factory debt, and what needs attention in each shop.
+- **`/shop-report`** (owner only) is the KPI report for both shops: sales, final result, gross margin and expenses with their change against the same days of the previous month, then daily, 6-month and weekday charts. Money figures come from the results ledger; register and order figures appear once there are any. It opens on the latest month with ledger days.
+
+Everything recorded before shops existed belongs to Ksar. To add a shop, insert a row in `shops`.
 
 ## How sales are estimated
 
@@ -76,9 +89,9 @@ days without a closing, products without a sale price, products counted only onc
 History can be loaded from a JSON file (format at the top of `scripts/import-results.ts`). Days already entered are never overwritten:
 
 ```bash
-npm run import:results -- data/results-2026-10.json
+npm run import:results -- data/results-2026-10.json --shop ksar
 # VPS, with the file in ./data:
-docker compose run --rm app npm run import:results -- /data/results-2026-10.json
+docker compose run --rm app npm run import:results -- /data/results-2026-10.json --shop larache
 ```
 
 ## Cash register (POS)

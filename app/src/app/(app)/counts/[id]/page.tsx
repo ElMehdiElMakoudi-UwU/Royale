@@ -4,16 +4,16 @@ import { CountForm } from "../count-form";
 import { formGroups } from "../form-groups";
 import { reopenCount, validateCount } from "../actions";
 import { PageHeader, StatusChip, TypeChip } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, label, money, qty } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { getCount, groupProducts, listCategories, listProducts, salesEstimate, usersById } from "@/lib/queries";
+import { requireShop } from "@/lib/shop";
 
 export default async function CountPage({ params, searchParams }: PageProps<"/counts/[id]">) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const id = Number((await params).id);
-  const count = Number.isInteger(id) ? getCount(id) : null;
+  const count = Number.isInteger(id) ? getCount(id, shop.id) : null;
   const isOwner = user.role === "owner";
   if (!count || (!isOwner && count.createdBy !== user.id)) notFound();
 
@@ -26,6 +26,7 @@ export default async function CountPage({ params, searchParams }: PageProps<"/co
       <>
         <PageHeader title={t.counts.editCount} subtitle={title} back={{ href: `/counts/${id}`, label: t.common.back }} />
         <CountForm
+          shopId={shop.id}
           t={{ counts: t.counts, common: t.common, units: t.units }}
           type={count.type}
           groups={formGroups(locale, t.products.noCategory)}

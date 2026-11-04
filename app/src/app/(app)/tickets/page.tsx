@@ -4,15 +4,15 @@ import { voidSale } from "@/app/pos/actions";
 import { ReprintButton } from "@/components/print-receipt";
 import { PageHeader, SectionTitle } from "@/components/ui";
 import { db, schema } from "@/db";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, money, qty, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { addDays } from "@/lib/money";
 import { usersById } from "@/lib/queries";
 import { getSettings } from "@/lib/settings";
+import { requireShop } from "@/lib/shop";
 
 export default async function TicketsPage({ searchParams }: PageProps<"/tickets">) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const tt = t.tickets;
   const isOwner = user.role === "owner";
@@ -23,7 +23,7 @@ export default async function TicketsPage({ searchParams }: PageProps<"/tickets"
   const sales = db
     .select()
     .from(schema.posSales)
-    .where(and(eq(schema.posSales.date, date), isOwner ? undefined : eq(schema.posSales.cashierId, user.id)))
+    .where(and(eq(schema.posSales.shopId, shop.id), eq(schema.posSales.date, date), isOwner ? undefined : eq(schema.posSales.cashierId, user.id)))
     .orderBy(desc(schema.posSales.soldAt))
     .all();
   const lines = sales.length
@@ -31,7 +31,7 @@ export default async function TicketsPage({ searchParams }: PageProps<"/tickets"
     : [];
   const products = new Map(db.select({ id: schema.products.id, unit: schema.products.unit }).from(schema.products).all().map((p) => [p.id, p.unit]));
   const names = usersById();
-  const settings = getSettings();
+  const settings = getSettings(shop.id);
 
   const completed = sales.filter((s) => s.status === "completed");
   const totalBy = (p: "cash" | "card") => completed.filter((s) => s.payment === p).reduce((a, s) => a + s.total, 0);

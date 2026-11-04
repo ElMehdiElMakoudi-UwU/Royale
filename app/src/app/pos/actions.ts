@@ -5,10 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { POS_PAYMENTS } from "@/db/schema";
-import { requireOwner, requireUser } from "@/lib/auth";
 import { today } from "@/lib/format";
+import { getShop, requireOwnerShop, requireShop } from "@/lib/shop";
 
 const saleSchema = z.object({
+  // The shop the register was open on. Missing on sales queued offline before shops existed.
+  shopId: z.number().int().positive().optional(),
   clientId: z.string().regex(/^[a-zA-Z0-9-]{8,64}$/),
   soldAt: z.string().datetime(),
   payment: z.enum(POS_PAYMENTS),
@@ -33,7 +35,7 @@ export type SaleResult = { ok: true; id: number } | { ok: false; error: "invalid
  * it queued while offline, or retry after a timeout that actually succeeded.
  */
 export async function recordSale(input: SaleInput): Promise<SaleResult> {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const parsed = saleSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const sale = parsed.data;
@@ -45,6 +47,9 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
   const found = db.select({ id: schema.products.id }).from(schema.products).where(inArray(schema.products.id, ids)).all();
   if (found.length !== ids.length) return { ok: false, error: "invalid" };
 
+  // Staff always sell for their shop. The owner may have switched shop since this sale was queued.
+  const shopId = user.role === "owner" && sale.shopId && getShop(sale.shopId) ? sale.shopId : shop.id;
+
   const lines = sale.lines.map((l) => ({ ...l, total: Math.round(l.qty * l.unitPrice) }));
   const total = lines.reduce((s, l) => s + l.total, 0);
   const soldAt = new Date(sale.soldAt);
@@ -55,6 +60,7 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     const row = tx
       .insert(schema.posSales)
       .values({
+        shopId,
         clientId: sale.clientId,
         date,
         soldAt: soldAt.toISOString(),
@@ -74,12 +80,12 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
 }
 
 export async function voidSale(id: number, form: FormData) {
-  const owner = await requireOwner();
+  const { owner, shop } = await requireOwnerShop();
   const reason = String(form.get("reason") ?? "").trim().slice(0, 200);
   if (!reason) return;
   db.update(schema.posSales)
     .set({ status: "voided", voidedBy: owner.id, voidReason: reason })
-    .where(and(eq(schema.posSales.id, id), eq(schema.posSales.status, "completed")))
+    .where(and(eq(schema.posSales.id, id), eq(schema.posSales.shopId, shop.id), eq(schema.posSales.status, "completed")))
     .run();
   revalidatePath("/tickets");
   revalidatePath("/sales");

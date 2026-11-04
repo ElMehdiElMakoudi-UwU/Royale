@@ -1,14 +1,14 @@
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/db";
 import { PageHeader, StatusChip, TypeChip } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { dateLabel } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { usersById } from "@/lib/queries";
+import { requireShop } from "@/lib/shop";
 
 export default async function CountsPage({ searchParams }: PageProps<"/counts">) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const { sent } = await searchParams;
   const isOwner = user.role === "owner";
@@ -25,7 +25,7 @@ export default async function CountsPage({ searchParams }: PageProps<"/counts">)
     .from(schema.counts)
     .leftJoin(schema.countLines, eq(schema.countLines.countId, schema.counts.id))
     // Staff only see their own counts.
-    .where(isOwner ? undefined : eq(schema.counts.createdBy, user.id))
+    .where(and(eq(schema.counts.shopId, shop.id), isOwner ? undefined : eq(schema.counts.createdBy, user.id)))
     .groupBy(schema.counts.id)
     .orderBy(desc(schema.counts.date), desc(schema.counts.id))
     .limit(100)

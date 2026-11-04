@@ -2,16 +2,16 @@ import { and, eq, sum } from "drizzle-orm";
 import type { Metadata } from "next";
 import { Register, type PosProduct } from "./register";
 import { db, schema } from "@/db";
-import { requireUser } from "@/lib/auth";
 import { label, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { groupProducts, listCategories, listProducts } from "@/lib/queries";
 import { getSettings } from "@/lib/settings";
+import { requireShop } from "@/lib/shop";
 
 export const metadata: Metadata = { title: "Royale — Vente" };
 
 export default async function PosPage() {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const groups = groupProducts(listProducts(), listCategories());
 
@@ -35,16 +35,17 @@ export default async function PosPage() {
       db
         .select({ total: sum(schema.posSales.total) })
         .from(schema.posSales)
-        .where(and(eq(schema.posSales.date, today()), eq(schema.posSales.status, "completed")))
+        .where(and(eq(schema.posSales.shopId, shop.id), eq(schema.posSales.date, today()), eq(schema.posSales.status, "completed")))
         .get()?.total ?? 0,
     ) || 0;
 
-  const settings = getSettings();
+  const settings = getSettings(shop.id);
   return (
     <Register
       t={{ ...t.pos, units: t.units }}
       products={products}
       categories={categories}
+      shop={{ id: shop.id, name: label(shop, locale) }}
       cashier={user.name}
       todayTotal={todayTotal}
       receipt={{ header: settings.receiptHeader, footer: settings.receiptFooter, autoPrint: settings.autoPrint }}

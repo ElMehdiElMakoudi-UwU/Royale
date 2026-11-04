@@ -1,15 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import { OrderForm } from "../../order-form";
 import { PageHeader } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { getDict } from "@/lib/i18n";
 import { getOrder, orderProductOptions } from "@/lib/orders";
+import { requireShop } from "@/lib/shop";
 
 export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/edit">) {
-  await requireUser();
+  const { shop } = await requireShop();
   const { t, locale } = await getDict();
   const id = Number((await params).id);
-  const order = Number.isInteger(id) ? getOrder(id) : null;
+  const order = Number.isInteger(id) ? getOrder(id, shop.id) : null;
   if (!order) notFound();
   if (order.status === "delivered" || order.status === "cancelled") redirect(`/orders/${id}`);
 

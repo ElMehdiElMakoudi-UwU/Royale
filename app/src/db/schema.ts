@@ -6,6 +6,7 @@ import {
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 const createdAt = () =>
@@ -13,12 +14,27 @@ const createdAt = () =>
     .notNull()
     .default(sql`(datetime('now'))`);
 
+/** The shops. Products and categories are shared; almost everything else belongs to one shop. */
+export const shops = sqliteTable("shops", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nameFr: text("name_fr").notNull(),
+  nameAr: text("name_ar").notNull().default(""),
+  sort: integer("sort").notNull().default(0),
+});
+
+const shopId = () =>
+  integer("shop_id")
+    .notNull()
+    .references(() => shops.id);
+
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["owner", "staff"] }).notNull().default("staff"),
+  // The shop a staff member works in; null for owners, who see every shop.
+  shopId: integer("shop_id").references(() => shops.id),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: createdAt(),
 });
@@ -63,6 +79,7 @@ export type CountType = (typeof COUNT_TYPES)[number];
 
 export const counts = sqliteTable("counts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: shopId(),
   type: text("type", { enum: COUNT_TYPES }).notNull(),
   // Business day the count belongs to (YYYY-MM-DD, shop local time).
   date: text("date").notNull(),
@@ -96,10 +113,12 @@ export const countLines = sqliteTable(
 export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Category = typeof categories.$inferSelect;
+export type Shop = typeof shops.$inferSelect;
 export type Count = typeof counts.$inferSelect;
 
 export const deliveries = sqliteTable("deliveries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: shopId(),
   // Factory's delivery note number, e.g. "BL00030715". One note can span several printed sheets.
   blNumber: text("bl_number").notNull().default(""),
   // Delivery date printed on the note (YYYY-MM-DD); matched with delivery counts of the same day.
@@ -155,8 +174,9 @@ export const expenseCategories = sqliteTable("expense_categories", {
 
 export const cashClosings = sqliteTable("cash_closings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  // Business day being closed (YYYY-MM-DD). One closing per day.
-  date: text("date").notNull().unique(),
+  shopId: shopId(),
+  // Business day being closed (YYYY-MM-DD). One closing per day in each shop.
+  date: text("date").notNull(),
   // All money in centimes.
   openingFloat: integer("opening_float").notNull(),
   // Cash in the till at closing, before anything is taken out.
@@ -170,7 +190,7 @@ export const cashClosings = sqliteTable("cash_closings", {
     .references(() => users.id),
   validatedBy: integer("validated_by").references(() => users.id),
   createdAt: createdAt(),
-});
+}, (t) => [uniqueIndex("cash_closings_shop_date_idx").on(t.shopId, t.date)]);
 
 /** Money paid out of the till during the day (small purchases, owner withdrawal…). */
 export const cashOutflows = sqliteTable(
@@ -193,6 +213,7 @@ export type CashClosing = typeof cashClosings.$inferSelect;
 /** Costs paid outside the till (bank transfer, owner's pocket…). Till payouts are cash_outflows. */
 export const expenses = sqliteTable("expenses", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: shopId(),
   date: text("date").notNull(),
   categoryId: integer("category_id")
     .notNull()
@@ -208,6 +229,7 @@ export const expenses = sqliteTable("expenses", {
 
 export const employees = sqliteTable("employees", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: shopId(),
   name: text("name").notNull(),
   monthlySalary: integer("monthly_salary").notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
@@ -239,6 +261,7 @@ export const PAYMENT_METHODS = ["cash", "transfer", "cheque", "other"] as const;
  */
 export const factoryEntries = sqliteTable("factory_entries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  shopId: shopId(),
   date: text("date").notNull(),
   kind: text("kind", { enum: FACTORY_ENTRY_KINDS }).notNull(),
   amount: integer("amount").notNull(),
@@ -260,6 +283,7 @@ export const posSales = sqliteTable(
   "pos_sales",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    shopId: shopId(),
     // Generated on the tablet so a sale sent twice (flaky network, offline queue) is stored once.
     clientId: text("client_id").notNull().unique(),
     // Business day (YYYY-MM-DD, Morocco time) and exact time the sale was made on the tablet.
@@ -298,11 +322,16 @@ export const posSaleLines = sqliteTable(
   (t) => [index("pos_sale_lines_sale_idx").on(t.saleId)],
 );
 
-/** Small key/value store for shop settings (receipt header, footer…). */
-export const settings = sqliteTable("settings", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-});
+/** Small key/value store for each shop's settings (receipt header, footer…). */
+export const settings = sqliteTable(
+  "settings",
+  {
+    shopId: shopId(),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.shopId, t.key] })],
+);
 
 export const OCCASIONS = ["birthday", "wedding", "engagement", "birth", "eid", "ramadan", "other"] as const;
 export const ORDER_STATUSES = ["pending", "ready", "delivered", "cancelled"] as const;
@@ -314,6 +343,7 @@ export const orders = sqliteTable(
   "orders",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    shopId: shopId(),
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull().default(""),
     occasion: text("occasion", { enum: OCCASIONS }).notNull(),
@@ -377,7 +407,8 @@ export const orderPayments = sqliteTable(
  * Deliberately independent of cash closings and delivery notes. All money in centimes.
  */
 export const resultDays = sqliteTable("result_days", {
-  date: text("date").primaryKey(),
+  shopId: shopId(),
+  date: text("date").notNull(),
   // What the day's deliveries cost, owed to the Royale factory.
   creditRoyale: integer("credit_royale").notNull().default(0),
   // Takings of the 9h-15h and 15h-23h shifts.
@@ -388,18 +419,24 @@ export const resultDays = sqliteTable("result_days", {
   // Part of `expenses` that is the owner's personal cost, not a cost of the shop.
   ownerExpenses: integer("owner_expenses").notNull().default(0),
   note: text("note").notNull().default(""),
-});
+}, (t) => [primaryKey({ columns: [t.shopId, t.date] })]);
 
 /** First day of each results period after the first; a month with none is a single period. */
-export const resultPeriodStarts = sqliteTable("result_period_starts", {
-  date: text("date").primaryKey(),
-});
+export const resultPeriodStarts = sqliteTable(
+  "result_period_starts",
+  {
+    shopId: shopId(),
+    date: text("date").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.shopId, t.date] })],
+);
 
 /** Budgeted monthly charges. A month without rows uses the latest earlier month that has some. */
 export const fixedCharges = sqliteTable(
   "fixed_charges",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    shopId: shopId(),
     month: text("month").notNull(),
     label: text("label").notNull(),
     amount: integer("amount").notNull(),

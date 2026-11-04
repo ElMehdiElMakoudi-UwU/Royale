@@ -4,18 +4,18 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { CopyBox } from "@/components/copy-box";
 import { PageHeader, SectionTitle } from "@/components/ui";
 import { FACTORY_ENTRY_KINDS, PAYMENT_METHODS } from "@/db/schema";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, money, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { factoryAccount, type FactoryWeek } from "@/lib/money";
+import { requireOwnerShop } from "@/lib/shop";
 
 const short = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const dh = (c: number) => `${money(c)} DH`;
 const METHOD_FR = { cash: "espèces", transfer: "virement", cheque: "chèque", other: "autre" } as const;
 
 /** Weekly statement in French, ready to send to the factory. */
-function statement(w: FactoryWeek) {
-  const out = [`Relevé semaine du ${short(w.start)} au ${short(w.end)}/${w.end.slice(0, 4)}`, `Solde précédent : ${dh(w.opening)}`];
+function statement(w: FactoryWeek, shopName: string) {
+  const out = [`Boutique ${shopName}`, `Relevé semaine du ${short(w.start)} au ${short(w.end)}/${w.end.slice(0, 4)}`, `Solde précédent : ${dh(w.opening)}`];
   if (w.openingAdded) out.push(`Solde de départ : ${dh(w.openingAdded)}`);
   if (w.notes.length) {
     out.push("", "Bons :");
@@ -40,10 +40,10 @@ function statement(w: FactoryWeek) {
 }
 
 export default async function FactoryPage() {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const tf = t.factory;
-  const account = factoryAccount();
+  const account = factoryAccount(shop.id);
 
   return (
     <>
@@ -160,7 +160,7 @@ export default async function FactoryPage() {
                     )}
                     <div>
                       <SectionTitle>{tf.statement}</SectionTitle>
-                      <CopyBox text={statement(w)} labels={{ copy: t.deliveries.copy, copied: t.deliveries.copied }} />
+                      <CopyBox text={statement(w, shop.nameFr)} labels={{ copy: t.deliveries.copy, copied: t.deliveries.copied }} />
                     </div>
                   </div>
                 </details>

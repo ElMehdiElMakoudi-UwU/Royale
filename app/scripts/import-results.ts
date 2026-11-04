@@ -2,7 +2,7 @@
  * Imports results history from a JSON file into the results ledger. Days already in the
  * ledger are left untouched, so it's safe to re-run and never overwrites later corrections.
  *
- *   npm run import:results -- data/results-2026-10.json
+ *   npm run import:results -- data/results-2026-10.json --shop ksar
  *
  * Amounts in the file are in DH:
  *   {
@@ -15,10 +15,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { openDb } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -45,8 +44,9 @@ const File = z.object({
 });
 
 const file = process.argv[2];
-if (!file) {
-  console.error("Usage: npm run import:results -- <file.json>");
+const shopName = process.argv[3] === "--shop" ? process.argv[4]?.toLowerCase() : undefined;
+if (!file || !shopName) {
+  console.error("Usage: npm run import:results -- <file.json> --shop <ksar|larache>");
   process.exit(1);
 }
 const data = File.parse(JSON.parse(fs.readFileSync(file, "utf8")));
@@ -54,9 +54,14 @@ const cents = (amount: number) => Math.round(amount * 100);
 
 const dataDir = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 const sqlite = new Database(path.join(dataDir, "royale.db"));
-sqlite.pragma("foreign_keys = ON");
-const db = drizzle(sqlite, { schema });
-migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+const db = openDb(sqlite);
+
+const shop = db.select().from(schema.shops).all().find((s) => s.nameFr.toLowerCase() === shopName);
+if (!shop) {
+  console.error(`Unknown shop "${shopName}".`);
+  process.exit(1);
+}
+const shopId = shop.id;
 
 let imported = 0;
 db.transaction((tx) => {
@@ -64,6 +69,7 @@ db.transaction((tx) => {
     const { changes } = tx
       .insert(schema.resultDays)
       .values({
+        shopId,
         date: d.date,
         creditRoyale: cents(d.creditRoyale),
         morning: cents(d.morning),
@@ -77,14 +83,18 @@ db.transaction((tx) => {
     imported += changes;
   }
   for (const start of data.periodStarts) {
-    tx.insert(schema.resultPeriodStarts).values({ date: start }).onConflictDoNothing().run();
+    tx.insert(schema.resultPeriodStarts).values({ shopId, date: start }).onConflictDoNothing().run();
   }
   if (data.fixedCharges) {
     const { month, items } = data.fixedCharges;
-    const existing = tx.select().from(schema.fixedCharges).where(eq(schema.fixedCharges.month, month)).all();
+    const existing = tx
+      .select()
+      .from(schema.fixedCharges)
+      .where(and(eq(schema.fixedCharges.shopId, shopId), eq(schema.fixedCharges.month, month)))
+      .all();
     if (existing.length === 0) {
       tx.insert(schema.fixedCharges)
-        .values(items.map((i) => ({ month, label: i.label, amount: cents(i.amount) })))
+        .values(items.map((i) => ({ shopId, month, label: i.label, amount: cents(i.amount) })))
         .run();
     }
   }

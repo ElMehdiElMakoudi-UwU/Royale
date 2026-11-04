@@ -23,6 +23,7 @@ type Props = {
   t: Dict["pos"] & { units: Dict["units"] };
   products: PosProduct[];
   categories: { key: string; label: string }[];
+  shop: { id: number; name: string };
   cashier: string;
   todayTotal: number;
   receipt: { header: string; footer: string; autoPrint: boolean };
@@ -105,7 +106,7 @@ function Numpad({
 
 const toNumber = (s: string) => Number((s || "0").replace(",", "."));
 
-export function Register({ t, products, categories, cashier, todayTotal, receipt }: Props) {
+export function Register({ t, products, categories, shop, cashier, todayTotal, receipt }: Props) {
   const [lines, setLines] = useState<Line[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -214,6 +215,7 @@ export function Register({ t, products, categories, cashier, todayTotal, receipt
   const finish = (payment: "cash" | "card", cashGiven: number | null) => {
     if (lines.length === 0) return;
     const sale: SaleInput = {
+      shopId: shop.id,
       clientId: uuid(),
       soldAt: new Date().toISOString(),
       payment,
@@ -267,6 +269,7 @@ export function Register({ t, products, categories, cashier, todayTotal, receipt
               {queued > 0 && `${queued} ${t.queued}`}
             </span>
           )}
+          <span className="font-semibold text-cocoa">{shop.name}</span>
           <span className="text-muted">{cashier}</span>
           <span className="tabular hidden sm:inline">
             <span className="text-muted">{t.today} </span>

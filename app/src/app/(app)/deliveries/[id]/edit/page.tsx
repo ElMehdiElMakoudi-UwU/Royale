@@ -1,17 +1,17 @@
 import { notFound, redirect } from "next/navigation";
 import { DeliveryEditor, type ProductOption } from "../../delivery-editor";
 import { PageHeader } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { aiEnabled } from "@/lib/extract";
 import { label } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { getDelivery, groupProducts, listCategories, listProducts } from "@/lib/queries";
+import { requireOwnerShop } from "@/lib/shop";
 
 export default async function EditDeliveryPage({ params }: PageProps<"/deliveries/[id]/edit">) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const id = Number((await params).id);
-  const delivery = Number.isInteger(id) ? getDelivery(id) : null;
+  const delivery = Number.isInteger(id) ? getDelivery(id, shop.id) : null;
   if (!delivery) notFound();
   if (delivery.status !== "draft") redirect(`/deliveries/${id}`);
 

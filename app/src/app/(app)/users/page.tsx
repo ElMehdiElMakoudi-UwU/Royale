@@ -2,13 +2,16 @@ import { asc } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { PageHeader } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
+import { label } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
+import { listShops } from "@/lib/shop";
 import { setActive } from "./actions";
-import { NewUserForm, ResetPasswordForm } from "./user-forms";
+import { NewUserForm, ResetPasswordForm, UserShopSelect } from "./user-forms";
 
 export default async function UsersPage() {
   const me = await requireOwner();
-  const { t } = await getDict();
+  const { t, locale } = await getDict();
+  const shops = listShops().map((s) => ({ id: s.id, name: label(s, locale) }));
   const users = db.select().from(schema.users).orderBy(asc(schema.users.name)).all();
   const ft = { users: t.users, common: t.common, errors: t.errors };
 
@@ -29,6 +32,7 @@ export default async function UsersPage() {
                   {!u.active && ` · ${t.common.inactive}`}
                 </div>
               </div>
+              {u.role === "staff" && <UserShopSelect userId={u.id} shops={shops} current={u.shopId} label={t.recap.shop} />}
               <ResetPasswordForm t={ft} userId={u.id} />
               {u.id !== me.id && (
                 <form action={setActive.bind(null, u.id, !u.active)}>
@@ -40,7 +44,7 @@ export default async function UsersPage() {
             </li>
           ))}
         </ul>
-        <NewUserForm t={ft} />
+        <NewUserForm t={ft} shops={shops} shopLabel={t.recap.shop} />
       </div>
     </>
   );

@@ -2,13 +2,13 @@ import { desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/db";
 import { PageHeader } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, money } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
+import { requireOwnerShop } from "@/lib/shop";
 import { createDelivery } from "./actions";
 
 export default async function DeliveriesPage() {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
 
   const rows = db
@@ -24,6 +24,7 @@ export default async function DeliveriesPage() {
     })
     .from(schema.deliveries)
     .leftJoin(schema.deliveryLines, eq(schema.deliveryLines.deliveryId, schema.deliveries.id))
+    .where(eq(schema.deliveries.shopId, shop.id))
     .groupBy(schema.deliveries.id)
     .orderBy(desc(schema.deliveries.date), desc(schema.deliveries.id))
     .limit(200)

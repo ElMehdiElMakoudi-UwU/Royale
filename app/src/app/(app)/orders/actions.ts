@@ -1,16 +1,18 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { OCCASIONS, ORDER_PAYMENT_METHODS, type OrderStatus } from "@/db/schema";
-import { requireOwner, requireUser } from "@/lib/auth";
 import { today } from "@/lib/format";
 import { formAmount, formDate, formId } from "@/lib/form";
 import { paidByOrder } from "@/lib/orders";
 import { listProducts } from "@/lib/queries";
+import { requireOwnerShop, requireShop } from "@/lib/shop";
+
+const inShop = (orderId: number, shopId: number) => and(eq(schema.orders.id, orderId), eq(schema.orders.shopId, shopId));
 
 function revalidate(id?: number) {
   revalidatePath("/orders");
@@ -48,13 +50,13 @@ export type OrderResult = { ok: true; id: number } | { ok: false; error: "invali
 
 /** Creates an order, or edits one that hasn't been handed over or cancelled yet. */
 export async function saveOrder(id: number | null, input: OrderInput): Promise<OrderResult> {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const parsed = orderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const { lines, deposit, ...data } = parsed.data;
 
   if (id != null) {
-    const existing = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    const existing = db.select().from(schema.orders).where(inShop(id, shop.id)).get();
     if (!existing || existing.status === "delivered" || existing.status === "cancelled") return { ok: false, error: "locked" };
   }
   const products = new Set(listProducts({ includeInactive: true }).map((p) => p.id));
@@ -71,7 +73,7 @@ export async function saveOrder(id: number | null, input: OrderInput): Promise<O
     if (orderId == null) {
       orderId = tx
         .insert(schema.orders)
-        .values({ ...data, total, createdBy: user.id })
+        .values({ ...data, shopId: shop.id, total, createdBy: user.id })
         .returning({ id: schema.orders.id })
         .get().id;
       if (deposit && deposit.amount > 0) {
@@ -90,13 +92,13 @@ export async function saveOrder(id: number | null, input: OrderInput): Promise<O
 }
 
 export async function addPayment(orderId: number, form: FormData) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const amount = formAmount(form);
   const method = String(form.get("method") ?? "");
   // Staff record today's payments; the owner can enter one received on another day.
   const date = user.role === "owner" ? (formDate(form) ?? today()) : today();
   if (!amount || !(ORDER_PAYMENT_METHODS as readonly string[]).includes(method)) return;
-  const order = db.select().from(schema.orders).where(eq(schema.orders.id, orderId)).get();
+  const order = db.select().from(schema.orders).where(inShop(orderId, shop.id)).get();
   if (!order || order.status === "cancelled") return;
   db.insert(schema.orderPayments)
     .values({ orderId, date, amount, method: method as (typeof ORDER_PAYMENT_METHODS)[number], createdBy: user.id })
@@ -105,24 +107,24 @@ export async function addPayment(orderId: number, form: FormData) {
 }
 
 export async function deletePayment(orderId: number, form: FormData) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const paymentId = formId(form, "paymentId");
-  if (!paymentId) return;
-  db.delete(schema.orderPayments).where(eq(schema.orderPayments.id, paymentId)).run();
+  if (!paymentId || !db.select({ id: schema.orders.id }).from(schema.orders).where(inShop(orderId, shop.id)).get()) return;
+  db.delete(schema.orderPayments).where(and(eq(schema.orderPayments.id, paymentId), eq(schema.orderPayments.orderId, orderId))).run();
   revalidate(orderId);
 }
 
 /** Staff move an order forward (ready, handed over); only the owner cancels or reopens. */
 export async function setOrderStatus(orderId: number, status: OrderStatus) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   if (user.role !== "owner" && (status === "cancelled" || status === "pending")) return;
-  db.update(schema.orders).set({ status }).where(eq(schema.orders.id, orderId)).run();
+  db.update(schema.orders).set({ status }).where(inShop(orderId, shop.id)).run();
   revalidate(orderId);
 }
 
 export async function deleteOrder(orderId: number) {
-  await requireOwner();
-  db.delete(schema.orders).where(eq(schema.orders.id, orderId)).run();
+  const { shop } = await requireOwnerShop();
+  db.delete(schema.orders).where(inShop(orderId, shop.id)).run();
   revalidate();
   redirect("/orders");
 }

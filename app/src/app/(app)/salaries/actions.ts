@@ -1,11 +1,11 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db, schema } from "@/db";
 import { SALARY_KINDS } from "@/db/schema";
-import { requireOwner } from "@/lib/auth";
 import { formAmount, formDate, formId, formMonth, formText } from "@/lib/form";
+import { requireOwnerShop } from "@/lib/shop";
 
 function revalidate() {
   revalidatePath("/salaries");
@@ -13,37 +13,37 @@ function revalidate() {
 }
 
 export async function addEmployee(form: FormData) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const name = formText(form, "name", 100);
   const monthlySalary = formAmount(form, "monthlySalary");
   if (!name || !monthlySalary) return;
-  db.insert(schema.employees).values({ name, monthlySalary }).run();
+  db.insert(schema.employees).values({ shopId: shop.id, name, monthlySalary }).run();
   revalidate();
 }
 
 export async function updateSalary(id: number, form: FormData) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const monthlySalary = formAmount(form, "monthlySalary");
   if (!monthlySalary) return;
-  db.update(schema.employees).set({ monthlySalary }).where(eq(schema.employees.id, id)).run();
+  db.update(schema.employees).set({ monthlySalary }).where(and(eq(schema.employees.id, id), eq(schema.employees.shopId, shop.id))).run();
   revalidate();
 }
 
 export async function setEmployeeActive(id: number, active: boolean) {
-  await requireOwner();
-  db.update(schema.employees).set({ active }).where(eq(schema.employees.id, id)).run();
+  const { shop } = await requireOwnerShop();
+  db.update(schema.employees).set({ active }).where(and(eq(schema.employees.id, id), eq(schema.employees.shopId, shop.id))).run();
   revalidate();
 }
 
 export async function addSalaryPayment(form: FormData) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const employeeId = formId(form, "employeeId");
   const kind = SALARY_KINDS.find((k) => k === form.get("kind"));
   const date = formDate(form);
   const month = formMonth(form);
   const amount = formAmount(form);
   if (!employeeId || !kind || !date || !month || !amount) return;
-  if (!db.select().from(schema.employees).where(eq(schema.employees.id, employeeId)).get()) return;
+  if (!db.select().from(schema.employees).where(and(eq(schema.employees.id, employeeId), eq(schema.employees.shopId, shop.id))).get()) return;
   db.insert(schema.salaryPayments)
     .values({ employeeId, kind, date, month, amount, note: formText(form, "note") })
     .run();
@@ -51,7 +51,14 @@ export async function addSalaryPayment(form: FormData) {
 }
 
 export async function deleteSalaryPayment(id: number) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
+  const payment = db
+    .select({ id: schema.salaryPayments.id })
+    .from(schema.salaryPayments)
+    .innerJoin(schema.employees, eq(schema.employees.id, schema.salaryPayments.employeeId))
+    .where(and(eq(schema.salaryPayments.id, id), eq(schema.employees.shopId, shop.id)))
+    .get();
+  if (!payment) return;
   db.delete(schema.salaryPayments).where(eq(schema.salaryPayments.id, id)).run();
   revalidate();
 }

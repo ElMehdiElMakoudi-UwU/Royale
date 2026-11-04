@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, label, money, qty } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { salesPeriods } from "@/lib/sales";
+import { requireOwnerShop } from "@/lib/shop";
 
 export default async function SalesPage() {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const ts = t.sales;
   const tp = t.posCompare;
-  const periods = salesPeriods();
+  const periods = salesPeriods(shop.id);
 
   const totals = periods.reduce(
     (s, p) => ({ expected: s.expected + p.expected, declared: s.declared + p.declared, gap: s.gap + p.gap }),

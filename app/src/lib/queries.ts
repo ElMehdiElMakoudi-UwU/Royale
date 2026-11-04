@@ -29,8 +29,8 @@ export function groupProducts(products: Product[], categories: Category[]): Prod
   return groups.filter((g) => g.products.length > 0);
 }
 
-export function getCount(id: number) {
-  const count = db.select().from(schema.counts).where(eq(schema.counts.id, id)).get();
+export function getCount(id: number, shopId: number) {
+  const count = db.select().from(schema.counts).where(and(eq(schema.counts.id, id), eq(schema.counts.shopId, shopId))).get();
   if (!count) return null;
   const lines = db.select().from(schema.countLines).where(eq(schema.countLines.countId, id)).all();
   return { ...count, lines };
@@ -48,12 +48,13 @@ function linesOf(countIds: number[]) {
  * are included — stock is counted before the morning delivery is put away, so day D's
  * delivery is not yet in day D's stock count.
  */
-export function salesEstimate(count: { id: number; date: string }) {
+export function salesEstimate(count: { id: number; date: string; shopId: number }) {
   const previous = db
     .select()
     .from(schema.counts)
     .where(
       and(
+        eq(schema.counts.shopId, count.shopId),
         eq(schema.counts.type, "stock"),
         eq(schema.counts.status, "validated"),
         lt(schema.counts.date, count.date),
@@ -68,6 +69,7 @@ export function salesEstimate(count: { id: number; date: string }) {
     .from(schema.counts)
     .where(
       and(
+        eq(schema.counts.shopId, count.shopId),
         eq(schema.counts.type, "delivery"),
         eq(schema.counts.status, "validated"),
         gte(schema.counts.date, previous.date),
@@ -94,11 +96,11 @@ export function usersById() {
  * Quantities counted on delivery for a day (all delivery counts of that date summed),
  * or null when nobody counted that delivery.
  */
-export function countedForDate(date: string) {
+export function countedForDate(shopId: number, date: string) {
   const ids = db
     .select({ id: schema.counts.id })
     .from(schema.counts)
-    .where(and(eq(schema.counts.type, "delivery"), eq(schema.counts.date, date)))
+    .where(and(eq(schema.counts.shopId, shopId), eq(schema.counts.type, "delivery"), eq(schema.counts.date, date)))
     .all()
     .map((c) => c.id);
   if (ids.length === 0) return null;
@@ -107,8 +109,8 @@ export function countedForDate(date: string) {
   return { qty, countIds: ids };
 }
 
-export function getDelivery(id: number) {
-  const delivery = db.select().from(schema.deliveries).where(eq(schema.deliveries.id, id)).get();
+export function getDelivery(id: number, shopId: number) {
+  const delivery = db.select().from(schema.deliveries).where(and(eq(schema.deliveries.id, id), eq(schema.deliveries.shopId, shopId))).get();
   if (!delivery) return null;
   const lines = db
     .select()

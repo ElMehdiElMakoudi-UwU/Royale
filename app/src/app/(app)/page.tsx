@@ -2,7 +2,6 @@ import { and, count, desc, eq, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { db, schema } from "@/db";
 import { StatusChip, TypeChip } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, money, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { usersById } from "@/lib/queries";
@@ -10,6 +9,7 @@ import { addDays, factoryAccount } from "@/lib/money";
 import { openOrders } from "@/lib/orders";
 import { OrderStatusChip } from "./orders/status-chip";
 import { salesPeriods } from "@/lib/sales";
+import { requireShop } from "@/lib/shop";
 
 function ActionCard({ href, title, hint, icon }: { href: string; title: string; hint: string; icon: React.ReactNode }) {
   return (
@@ -31,12 +31,12 @@ const svg = (d: React.ReactNode) => (
 );
 
 export default async function HomePage() {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const isOwner = user.role === "owner";
 
   const pending = isOwner
-    ? db.select({ n: count() }).from(schema.counts).where(eq(schema.counts.status, "submitted")).get()!.n
+    ? db.select({ n: count() }).from(schema.counts).where(and(eq(schema.counts.shopId, shop.id), eq(schema.counts.status, "submitted"))).get()!.n
     : 0;
   const missingPrices = isOwner
     ? db
@@ -46,20 +46,20 @@ export default async function HomePage() {
         .get()!.n
     : 0;
   const draftNotes = isOwner
-    ? db.select({ n: count() }).from(schema.deliveries).where(eq(schema.deliveries.status, "draft")).get()!.n
+    ? db.select({ n: count() }).from(schema.deliveries).where(and(eq(schema.deliveries.shopId, shop.id), eq(schema.deliveries.status, "draft"))).get()!.n
     : 0;
-  const lastPeriod = isOwner ? salesPeriods(1)[0] : undefined;
-  const factoryBalance = isOwner ? factoryAccount().balance : 0;
+  const lastPeriod = isOwner ? salesPeriods(shop.id, 1)[0] : undefined;
+  const factoryBalance = isOwner ? factoryAccount(shop.id).balance : 0;
   const recent = db
     .select()
     .from(schema.counts)
-    .where(isOwner ? undefined : eq(schema.counts.createdBy, user.id))
+    .where(and(eq(schema.counts.shopId, shop.id), isOwner ? undefined : eq(schema.counts.createdBy, user.id)))
     .orderBy(desc(schema.counts.date), desc(schema.counts.id))
     .limit(5)
     .all();
   const names = usersById();
   // Late, today's and tomorrow's pickups.
-  const dueOrders = openOrders(addDays(today(), 2));
+  const dueOrders = openOrders(shop.id, addDays(today(), 2));
 
   return (
     <div className="space-y-8">

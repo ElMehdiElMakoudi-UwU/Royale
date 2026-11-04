@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { COUNT_TYPES } from "@/db/schema";
-import { requireOwner, requireUser } from "@/lib/auth";
 import { today } from "@/lib/format";
+import { requireOwnerShop, requireShop } from "@/lib/shop";
 
 const linesSchema = z
   .array(z.object({ productId: z.number().int().positive(), qty: z.number().finite().min(0).max(100000) }))
@@ -32,7 +32,7 @@ function checkProducts(productIds: number[]) {
 }
 
 export async function submitCount(input: z.infer<typeof countSchema>): Promise<SaveResult> {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const parsed = countSchema.safeParse(input);
   if (!parsed.success || !checkProducts(parsed.data.lines.map((l) => l.productId))) {
     return { ok: false, error: "invalid" };
@@ -44,7 +44,7 @@ export async function submitCount(input: z.infer<typeof countSchema>): Promise<S
   const id = db.transaction((tx) => {
     const count = tx
       .insert(schema.counts)
-      .values({ type, date, note: note.trim(), createdBy: user.id })
+      .values({ shopId: shop.id, type, date, note: note.trim(), createdBy: user.id })
       .returning({ id: schema.counts.id })
       .get();
     if (lines.length > 0) {
@@ -60,12 +60,12 @@ export async function submitCount(input: z.infer<typeof countSchema>): Promise<S
 
 /** Owner correction of a count that hasn't been validated yet: replaces all its lines. */
 export async function updateCount(id: number, input: z.infer<typeof countSchema>): Promise<SaveResult> {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const parsed = countSchema.safeParse(input);
   if (!parsed.success || !checkProducts(parsed.data.lines.map((l) => l.productId))) {
     return { ok: false, error: "invalid" };
   }
-  const existing = db.select().from(schema.counts).where(eq(schema.counts.id, id)).get();
+  const existing = db.select().from(schema.counts).where(and(eq(schema.counts.id, id), eq(schema.counts.shopId, shop.id))).get();
   if (!existing || existing.status === "validated") return { ok: false, error: "locked" };
 
   const { type, date, note, lines } = parsed.data;
@@ -83,10 +83,10 @@ export async function updateCount(id: number, input: z.infer<typeof countSchema>
 }
 
 export async function validateCount(id: number) {
-  const owner = await requireOwner();
+  const { owner, shop } = await requireOwnerShop();
   db.update(schema.counts)
     .set({ status: "validated", validatedBy: owner.id, validatedAt: new Date().toISOString() })
-    .where(and(eq(schema.counts.id, id), eq(schema.counts.status, "submitted")))
+    .where(and(eq(schema.counts.id, id), eq(schema.counts.shopId, shop.id), eq(schema.counts.status, "submitted")))
     .run();
   revalidatePath("/counts");
   revalidatePath(`/counts/${id}`);
@@ -95,10 +95,10 @@ export async function validateCount(id: number) {
 
 /** Lets the owner reopen a validated count to fix a mistake. */
 export async function reopenCount(id: number) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   db.update(schema.counts)
     .set({ status: "submitted", validatedBy: null, validatedAt: null })
-    .where(eq(schema.counts.id, id))
+    .where(and(eq(schema.counts.id, id), eq(schema.counts.shopId, shop.id)))
     .run();
   revalidatePath("/counts");
   revalidatePath(`/counts/${id}`);

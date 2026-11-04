@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { MonthNav, PageHeader } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { label, money, monthLabel, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { isMonth, monthOf, monthResult, nextMonth, prevMonth } from "@/lib/money";
+import { requireOwnerShop } from "@/lib/shop";
 
 function Line({ title, hint, value, sign, href }: { title: string; hint?: string; value: number; sign: "+" | "−"; href: string }) {
   return (
@@ -20,12 +20,12 @@ function Line({ title, hint, value, sign, href }: { title: string; hint?: string
 }
 
 export default async function ReportPage({ searchParams }: PageProps<"/report">) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const tr = t.report;
   const sp = (await searchParams).month;
   const month = isMonth(sp) ? sp : monthOf(today());
-  const r = monthResult(month);
+  const r = monthResult(shop.id, month);
   const expenseCats = r.expenses.categories.filter((c) => c.isExpense && r.expenses.byCategory.has(c.id));
 
   return (

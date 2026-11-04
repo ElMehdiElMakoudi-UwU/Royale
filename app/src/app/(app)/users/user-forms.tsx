@@ -2,9 +2,10 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import type { Dict } from "@/lib/i18n/fr";
-import { createUser, resetPassword } from "./actions";
+import { createUser, resetPassword, setUserShop } from "./actions";
 
 type T = Pick<Dict, "users" | "common" | "errors">;
+type ShopOption = { id: number; name: string };
 
 function ErrorText({ t, error }: { t: T; error?: string }) {
   if (!error) return null;
@@ -12,8 +13,9 @@ function ErrorText({ t, error }: { t: T; error?: string }) {
   return <p className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{msg}</p>;
 }
 
-export function NewUserForm({ t }: { t: T }) {
+export function NewUserForm({ t, shops, shopLabel }: { t: T; shops: ShopOption[]; shopLabel: string }) {
   const [state, action, pending] = useActionState(createUser, {});
+  const [role, setRole] = useState("staff");
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok) ref.current?.reset();
@@ -38,15 +40,46 @@ export function NewUserForm({ t }: { t: T }) {
         </div>
         <div>
           <label className="label" htmlFor="role">{t.users.role}</label>
-          <select id="role" name="role" className="field" defaultValue="staff">
+          <select id="role" name="role" className="field" value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="staff">{t.users.staff}</option>
             <option value="owner">{t.users.owner}</option>
           </select>
         </div>
+        {/* Owners see every shop, so only staff are assigned one. */}
+        {role === "staff" && (
+          <div>
+            <label className="label" htmlFor="shopId">{shopLabel}</label>
+            <select id="shopId" name="shopId" className="field" required defaultValue="">
+              <option value="" disabled>{shopLabel}</option>
+              {shops.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <ErrorText t={t} error={state.error} />
       {state.ok && <p className="text-sm text-ok">{t.common.saved}</p>}
       <button className="btn-primary" disabled={pending}>{t.users.new}</button>
+    </form>
+  );
+}
+
+export function UserShopSelect({ userId, shops, current, label }: { userId: number; shops: ShopOption[]; current: number | null; label: string }) {
+  return (
+    // Keyed because React resets a form after its action: this picks up the newly saved shop.
+    <form key={current} action={setUserShop.bind(null, userId)}>
+      <select
+        name="shopId"
+        aria-label={label}
+        defaultValue={current ?? ""}
+        onChange={(e) => e.target.form?.requestSubmit()}
+        className="field h-9 w-auto py-1 text-sm"
+      >
+        {shops.map((s) => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
     </form>
   );
 }

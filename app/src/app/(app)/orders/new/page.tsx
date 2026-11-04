@@ -1,12 +1,12 @@
 import { OrderForm } from "../order-form";
 import { PageHeader } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { orderProductOptions } from "@/lib/orders";
+import { requireShop } from "@/lib/shop";
 
 export default async function NewOrderPage() {
-  await requireUser();
+  await requireShop();
   const { t, locale } = await getDict();
   return (
     <>

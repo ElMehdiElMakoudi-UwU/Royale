@@ -1,25 +1,25 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClosingForm } from "../closing-form";
 import { reopenClosing, validateClosing } from "../actions";
 import { db, schema } from "@/db";
 import { PageHeader } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, money } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { usersById } from "@/lib/queries";
 import { addDays } from "@/lib/money";
 import { orderPaymentsByDay } from "@/lib/orders";
 import { closingRevenue, posByDay, salesPeriods } from "@/lib/sales";
+import { requireShop } from "@/lib/shop";
 
 export default async function ClosingPage({ params, searchParams }: PageProps<"/cash/[id]">) {
-  const user = await requireUser();
+  const { user, shop } = await requireShop();
   const { t, locale } = await getDict();
   const tc = t.cash;
   const id = Number((await params).id);
   const closing = Number.isInteger(id)
-    ? db.select().from(schema.cashClosings).where(eq(schema.cashClosings.id, id)).get()
+    ? db.select().from(schema.cashClosings).where(and(eq(schema.cashClosings.id, id), eq(schema.cashClosings.shopId, shop.id))).get()
     : undefined;
   const isOwner = user.role === "owner";
   if (!closing || (!isOwner && closing.createdBy !== user.id)) notFound();
@@ -51,10 +51,10 @@ export default async function ClosingPage({ params, searchParams }: PageProps<"/
     );
   }
 
-  const period = isOwner ? salesPeriods().find((p) => closing.date >= p.from && closing.date < p.to) : undefined;
+  const period = isOwner ? salesPeriods(shop.id).find((p) => closing.date >= p.from && closing.date < p.to) : undefined;
   // When the register was used that day, the till should hold: float + cash sales + order payments − payouts.
-  const pos = isOwner ? posByDay(closing.date, addDays(closing.date, 1)).days.get(closing.date) : undefined;
-  const orderPaid = isOwner ? orderPaymentsByDay(closing.date, addDays(closing.date, 1)).get(closing.date) : undefined;
+  const pos = isOwner ? posByDay(shop.id, closing.date, addDays(closing.date, 1)).days.get(closing.date) : undefined;
+  const orderPaid = isOwner ? orderPaymentsByDay(shop.id, closing.date, addDays(closing.date, 1)).get(closing.date) : undefined;
   const orderCash = orderPaid?.cash ?? 0;
   const expectedCard = (pos?.card ?? 0) + (orderPaid?.card ?? 0);
   const expectedCash = pos ? closing.openingFloat + pos.cash + orderCash - outTotal : null;

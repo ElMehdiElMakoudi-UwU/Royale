@@ -6,11 +6,11 @@ import { CopyBox } from "@/components/copy-box";
 import { db, schema } from "@/db";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageHeader } from "@/components/ui";
-import { requireOwner } from "@/lib/auth";
 import { dateLabel, label, money, qty } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { countedForDate, getDelivery, listProducts } from "@/lib/queries";
 import { claimMessage, reconcile } from "@/lib/reconcile";
+import { requireOwnerShop } from "@/lib/shop";
 
 function Stat({ title, value, hint, tone = "default" }: { title: string; value: string; hint?: string; tone?: "default" | "bad" | "ok" }) {
   const color = tone === "bad" ? "text-bad" : tone === "ok" ? "text-ok" : "text-cocoa";
@@ -24,16 +24,16 @@ function Stat({ title, value, hint, tone = "default" }: { title: string; value: 
 }
 
 export default async function DeliveryPage({ params }: PageProps<"/deliveries/[id]">) {
-  await requireOwner();
+  const { shop } = await requireOwnerShop();
   const { t, locale } = await getDict();
   const td = t.deliveries;
   const id = Number((await params).id);
-  const delivery = Number.isInteger(id) ? getDelivery(id) : null;
+  const delivery = Number.isInteger(id) ? getDelivery(id, shop.id) : null;
   if (!delivery) notFound();
 
   const isDraft = delivery.status === "draft";
   const products = new Map(listProducts({ includeInactive: true }).map((p) => [p.id, p]));
-  const counted = countedForDate(delivery.date);
+  const counted = countedForDate(shop.id, delivery.date);
   const countRows = counted
     ? db.select().from(schema.counts).where(inArray(schema.counts.id, counted.countIds)).all()
     : [];

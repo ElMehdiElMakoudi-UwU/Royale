@@ -3,12 +3,14 @@ import { logoutAction } from "@/app/actions";
 import { LocaleButton } from "@/components/locale-button";
 import { BottomNav, TopNav } from "@/components/nav";
 import { navItems } from "@/components/nav-items";
-import { requireUser } from "@/lib/auth";
+import { ShopSwitcher } from "@/components/shop-switcher";
+import { label } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
+import { listShops, requireShop } from "@/lib/shop";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
-  const { t } = await getDict();
+  const { user, shop } = await requireShop();
+  const { t, locale } = await getDict();
 
   const items = navItems(user, t);
 
@@ -18,13 +20,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
           <Link href="/" className="flex items-center gap-2">
             <span className="grid size-8 place-items-center rounded-lg bg-cocoa font-display text-lg text-gold-soft">R</span>
-            <span className="font-display text-xl text-cocoa">{t.appName}</span>
+            <span className="font-display text-xl text-cocoa md:max-xl:hidden">{t.appName}</span>
           </Link>
           <TopNav items={items} moreLabel={t.nav.more} />
-          <div className="ms-auto flex items-center gap-4">
+          <div className="ms-auto flex items-center gap-3 sm:gap-4">
+            {user.role === "owner" ? (
+              <ShopSwitcher
+                shops={listShops().map((s) => ({ id: s.id, name: label(s, locale) }))}
+                current={shop.id}
+                label={t.recap.shop}
+              />
+            ) : (
+              <span className="text-sm font-semibold text-cocoa">{label(shop, locale)}</span>
+            )}
             <span className="hidden text-sm text-muted xl:inline">{user.name}</span>
             <LocaleButton label={t.common.language} />
-            <form action={logoutAction}>
+            {/* The owner's bar is full: below xl, logout lives in the "Plus" page. */}
+            <form action={logoutAction} className={user.role === "owner" ? "hidden xl:block" : ""}>
               <button className="text-sm font-medium text-muted hover:text-bad">{t.common.logout}</button>
             </form>
           </div>

@@ -1,20 +1,20 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { OrderStatusChip } from "./status-chip";
 import { PageHeader, SectionTitle } from "@/components/ui";
 import { db, schema } from "@/db";
 import type { Order } from "@/db/schema";
-import { requireUser } from "@/lib/auth";
 import { dateLabel, money, today } from "@/lib/format";
 import { getDict } from "@/lib/i18n";
 import { addDays } from "@/lib/money";
 import { openOrders, paidByOrder } from "@/lib/orders";
+import { requireShop } from "@/lib/shop";
 
 const VIEWS = ["open", "delivered", "cancelled"] as const;
 type View = (typeof VIEWS)[number];
 
 export default async function OrdersPage({ searchParams }: PageProps<"/orders">) {
-  await requireUser();
+  const { shop } = await requireShop();
   const { t, locale } = await getDict();
   const to = t.orders;
   const sp = (await searchParams).view;
@@ -22,8 +22,8 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
 
   const orders =
     view === "open"
-      ? openOrders()
-      : db.select().from(schema.orders).where(eq(schema.orders.status, view)).orderBy(desc(schema.orders.pickupDate)).limit(100).all();
+      ? openOrders(shop.id)
+      : db.select().from(schema.orders).where(and(eq(schema.orders.shopId, shop.id), eq(schema.orders.status, view))).orderBy(desc(schema.orders.pickupDate)).limit(100).all();
   const paid = paidByOrder(orders.map((o) => o.id));
   const lines = orders.length
     ? db.select().from(schema.orderLines).where(inArray(schema.orderLines.orderId, orders.map((o) => o.id))).all()

@@ -1,4 +1,5 @@
 import "server-only";
+import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 export type ShopSettings = {
@@ -14,8 +15,8 @@ const DEFAULTS: ShopSettings = {
   autoPrint: true,
 };
 
-export function getSettings(): ShopSettings {
-  const rows = new Map(db.select().from(schema.settings).all().map((r) => [r.key, r.value]));
+export function getSettings(shopId: number): ShopSettings {
+  const rows = new Map(db.select().from(schema.settings).where(eq(schema.settings.shopId, shopId)).all().map((r) => [r.key, r.value]));
   return {
     receiptHeader: rows.get("receiptHeader") ?? DEFAULTS.receiptHeader,
     receiptFooter: rows.get("receiptFooter") ?? DEFAULTS.receiptFooter,
@@ -23,12 +24,12 @@ export function getSettings(): ShopSettings {
   };
 }
 
-export function saveSettings(values: ShopSettings) {
+export function saveSettings(shopId: number, values: ShopSettings) {
   db.transaction((tx) => {
     for (const [key, value] of Object.entries(values)) {
       tx.insert(schema.settings)
-        .values({ key, value: String(value) })
-        .onConflictDoUpdate({ target: schema.settings.key, set: { value: String(value) } })
+        .values({ shopId, key, value: String(value) })
+        .onConflictDoUpdate({ target: [schema.settings.shopId, schema.settings.key], set: { value: String(value) } })
         .run();
     }
   });
