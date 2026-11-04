@@ -372,6 +372,41 @@ export const orderPayments = sqliteTable(
   (t) => [index("order_payments_order_idx").on(t.orderId), index("order_payments_date_idx").on(t.date)],
 );
 
+/**
+ * One row of the owner's results ledger, typed by hand from the day's figures.
+ * Deliberately independent of cash closings and delivery notes. All money in centimes.
+ */
+export const resultDays = sqliteTable("result_days", {
+  date: text("date").primaryKey(),
+  // What the day's deliveries cost, owed to the Royale factory.
+  creditRoyale: integer("credit_royale").notNull().default(0),
+  // Takings of the 9h-15h and 15h-23h shifts.
+  morning: integer("morning").notNull().default(0),
+  evening: integer("evening").notNull().default(0),
+  // Everything paid out that day, the owner's personal costs included.
+  expenses: integer("expenses").notNull().default(0),
+  // Part of `expenses` that is the owner's personal cost, not a cost of the shop.
+  ownerExpenses: integer("owner_expenses").notNull().default(0),
+  note: text("note").notNull().default(""),
+});
+
+/** First day of each results period after the first; a month with none is a single period. */
+export const resultPeriodStarts = sqliteTable("result_period_starts", {
+  date: text("date").primaryKey(),
+});
+
+/** Budgeted monthly charges. A month without rows uses the latest earlier month that has some. */
+export const fixedCharges = sqliteTable(
+  "fixed_charges",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    month: text("month").notNull(),
+    label: text("label").notNull(),
+    amount: integer("amount").notNull(),
+  },
+  (t) => [index("fixed_charges_month_idx").on(t.month)],
+);
+
 export type Order = typeof orders.$inferSelect;
 export type OrderLine = typeof orderLines.$inferSelect;
 export type OrderPayment = typeof orderPayments.$inferSelect;

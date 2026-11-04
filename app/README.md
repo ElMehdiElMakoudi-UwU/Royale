@@ -1,6 +1,6 @@
 # Royale
 
-Shop management for the pastry shop: product catalog, staff accounts, stock and delivery counts, delivery-note checking, daily cash closing and cash-gap tracking, weekly factory account, expenses, salaries, a monthly result, and a touchscreen cash register (POS). French and Arabic.
+Shop management for the pastry shop: product catalog, staff accounts, stock and delivery counts, delivery-note checking, daily cash closing and cash-gap tracking, weekly factory account, expenses, salaries, a monthly result, a typed results ledger, and a touchscreen cash register (POS). French and Arabic.
 
 Stack: Next.js 16, SQLite (`better-sqlite3` + Drizzle), Tailwind 4. The whole database is one file: `data/royale.db`.
 
@@ -59,6 +59,27 @@ days without a closing, products without a sale price, products counted only onc
 - **Expenses**: entered directly (paid outside the till) plus till payouts from cash closings, once the owner gives them a category. The "Pas une dépense" category (owner withdrawal, advance already recorded) is excluded.
 - **Salaries**: monthly salary per employee; advances and salary payments count toward a salary month; bonuses are extra.
 - **Monthly result** = declared sales − accepted delivery notes − expenses − salaries paid. Stock changes are ignored.
+
+## Results ledger
+
+`/results` (owner only) replaces the "Royal Ksar El Kebir" workbook: a grid typed day by day (crédit Royale, 9h-15h and 15h-23h takings, expenses, the owner's part of them, notes). It is separate from cash closings and delivery notes, so its result can differ from the Bilan page.
+
+    Résultat brut = CA − crédit Royale
+    Résultat net 1 = brut − dépenses
+    Résultat net final = net 1 + dépenses Abdessalam (the owner's personal costs: paid out with the expenses, but not a cost of the shop)
+
+- **Periods**: a month is cut at the start dates the owner adds; without any, it's a single period.
+- **Fixed charges** are a comparison only and never change the final result. They accrue by calendar day up to the last day entered. Changing them applies to that month and later ones; earlier months keep their amounts.
+- **CA estimé** = crédit Royale × (1 + markup), 20% by default. **CA par jour** divides by the days with takings.
+- Stock changes are not included.
+
+History can be loaded from a JSON file (format at the top of `scripts/import-results.ts`). Days already entered are never overwritten:
+
+```bash
+npm run import:results -- data/results-2026-10.json
+# VPS, with the file in ./data:
+docker compose run --rm app npm run import:results -- /data/results-2026-10.json
+```
 
 ## Cash register (POS)
 

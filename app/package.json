@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx --env-file-if-exists=.env.local scripts/seed.ts",
+    "import:results": "tsx scripts/import-results.ts",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit"
   },

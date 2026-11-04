@@ -75,6 +75,12 @@ const icons: Record<string, React.ReactNode> = {
       <path d="m8 14 3-3 3 2 5-6" />
     </>
   ),
+  results: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M4 10h16M4 15h16M10 10v10" />
+    </>
+  ),
   more: (
     <>
       <circle cx="5" cy="12" r="1.3" />
